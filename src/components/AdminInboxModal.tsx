@@ -16,7 +16,9 @@ import {
   Link2,
   LogOut,
   Mail,
+  MailOpen,
   MessageCircle,
+  RotateCcw,
   Send,
   ShieldCheck,
   Trash2,
@@ -96,6 +98,7 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
       setConfirmSendItem(null);
       setReplyTargetId(null);
       setReplyNotice(null);
+      setAuthError(null);
     }
   }, [open]);
 
@@ -145,6 +148,11 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
 
     return () => unsubscribe();
   }, [open, authReady, isAuthorizedAdmin]);
+
+  const unreadCount = useMemo(
+    () => messages.filter((msg) => msg.status === 'new').length,
+    [messages]
+  );
 
   const filteredMessages = useMemo(() => {
     if (statusFilter === 'all') return messages;
@@ -206,6 +214,11 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
     } finally {
       setUpdatingId(null);
     }
+  };
+
+  const handleToggleReadStatus = async (item: ContactMessageRecord) => {
+    const isUnread = item.status === 'new';
+    await handleStatusChange(item.id, isUnread ? 'reviewed' : 'new');
   };
 
   const handleDelete = async (id: string) => {
@@ -411,7 +424,7 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
             </h2>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
             <button
               type="button"
               onClick={handleCopyAdminLink}
@@ -464,11 +477,16 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
               <p className="text-sm text-ink-muted leading-relaxed mb-6">
                 Sign in with <span className="text-ink font-medium">{ADMIN_EMAIL}</span> to view, triage, and manage saved client inquiries.
               </p>
+
               {authError && (
-                <p className="text-xs text-red-600 dark:text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 mb-4">
+                <p
+                  role="alert"
+                  className="text-xs text-red-600 dark:text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 mb-4"
+                >
                   {authError}
                 </p>
               )}
+
               <div className="flex flex-col items-center gap-3">
                 <button
                   type="button"
@@ -504,6 +522,7 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
                   Open Inbox Only (Read &amp; Reply on WhatsApp)
                 </button>
               </div>
+
               <p className="text-[11px] text-ink-subtle leading-relaxed mt-5">
                 Tip: Open <span className="text-ink-secondary font-mono-tabular">/#aizertechgh-admin</span> and add it to your iPhone Home Screen so it looks like a one-tap app icon.
               </p>
@@ -546,7 +565,10 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
                 </div>
                 <p className="text-xs font-mono-tabular text-ink-subtle">
                   {filteredMessages.length}{' '}
-                  {filteredMessages.length === 1 ? 'message' : 'messages'}
+                  {filteredMessages.length === 1 ? 'message' : 'messages'} ·{' '}
+                  <span className={unreadCount > 0 ? 'text-accent font-medium' : ''}>
+                    {unreadCount} unread
+                  </span>
                 </p>
               </div>
 
@@ -567,16 +589,28 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
                 <div className="space-y-4">
                   {filteredMessages.map((item) => {
                     const cleanDigits = item.senderPhone.replace(/\D/g, '');
+                    const isUnread = item.status === 'new';
                     return (
                       <div
                         key={item.id}
-                        className="rounded-xl bg-field border border-hairline p-5"
+                        className={`rounded-xl bg-field border p-5 transition-colors ${
+                          isUnread ? 'border-accent/55' : 'border-hairline'
+                        }`}
                       >
                         <div className="flex flex-wrap items-start justify-between gap-4 pb-3 mb-3 border-b border-hairline">
                           <div>
-                            <h4 className="font-display text-lg font-semibold text-ink leading-[1.2]">
-                              {item.senderName}
-                            </h4>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h4 className="font-display text-lg font-semibold text-ink leading-[1.2]">
+                                {item.senderName}
+                              </h4>
+                              <span
+                                className={`text-[11px] font-mono-tabular uppercase tracking-wider font-semibold ${
+                                  isUnread ? 'text-accent' : 'text-ink-subtle'
+                                }`}
+                              >
+                                · {isUnread ? 'Unread' : 'Read'}
+                              </span>
+                            </div>
                             <p className="text-xs text-ink-muted mt-0.5">
                               {item.senderEmail}
                               {item.senderPhone ? ` · ${item.senderPhone}` : ''}
@@ -625,6 +659,30 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
                           </div>
 
                           <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              disabled={updatingId === item.id}
+                              onClick={() => handleToggleReadStatus(item)}
+                              aria-pressed={!isUnread}
+                              className={`haptic-tap-sm inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium cursor-pointer disabled:opacity-60 ${
+                                isUnread
+                                  ? 'bg-surface-elevated border-accent/45 text-accent hover:bg-accent/10'
+                                  : 'bg-surface-elevated border-hairline text-ink-muted hover:text-ink hover:border-hairline-strong'
+                              }`}
+                            >
+                              {isUnread ? (
+                                <>
+                                  <MailOpen className="w-3.5 h-3.5 shrink-0" />
+                                  <span>Mark as Read</span>
+                                </>
+                              ) : (
+                                <>
+                                  <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                                  <span>Mark as Unread</span>
+                                </>
+                              )}
+                            </button>
+
                             <button
                               type="button"
                               onClick={() => openEmailComposer(item)}
