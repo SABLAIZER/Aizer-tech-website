@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Menu, MessageCircle, ShieldCheck, X } from 'lucide-react';
+import { Menu, MessageCircle, X } from 'lucide-react';
 import { buildWhatsAppUrl, WHATSAPP_DISPLAY } from '../types';
 import { BrandMark } from './BrandMark';
 
 interface NavbarProps {
   onNavigateContact: () => void;
-  onOpenAdmin: () => void;
 }
 
 const NAV_LINKS = [
@@ -16,10 +15,7 @@ const NAV_LINKS = [
   { label: 'Contact', href: '#contact' },
 ];
 
-export const Navbar: React.FC<NavbarProps> = ({
-  onNavigateContact,
-  onOpenAdmin,
-}) => {
+export const Navbar: React.FC<NavbarProps> = ({ onNavigateContact }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -70,19 +66,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             ))}
           </nav>
 
-          {/* Zone 3: Primary Action + Subtle Admin Shortcut */}
-          <div className="flex items-center gap-2.5 shrink-0">
-            <button
-              type="button"
-              onClick={onOpenAdmin}
-              aria-label="Open Studio Admin Inbox"
-              title="Studio Admin Inbox"
-              className="haptic-tap-sm hidden md:inline-flex items-center gap-1.5 px-3 py-2.5 rounded-lg border border-hairline-strong text-xs font-medium text-ink-muted hover:text-accent hover:border-accent/50 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-            >
-              <ShieldCheck className="w-4 h-4 shrink-0" />
-              <span>Admin</span>
-            </button>
-
+          {/* Zone 3: Single Primary Action */}
+          <div className="flex items-center gap-3 shrink-0">
             <button
               type="button"
               onClick={onNavigateContact}
@@ -158,17 +143,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               <MessageCircle className="w-4 h-4 text-[#25D366]" />
               <span>WhatsApp {WHATSAPP_DISPLAY}</span>
             </a>
-            <button
-              type="button"
-              onClick={() => {
-                setMobileOpen(false);
-                onOpenAdmin();
-              }}
-              className="haptic-tap w-full py-3 px-4 rounded-xl border border-hairline-strong text-xs font-medium text-ink-muted hover:text-accent hover:border-accent/50 inline-flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <ShieldCheck className="w-4 h-4 shrink-0" />
-              <span>Studio Admin Inbox</span>
-            </button>
           </div>
         </div>
       )}

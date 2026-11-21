@@ -8,16 +8,11 @@ import {
 import { BrandMark } from './BrandMark';
 
 interface FooterProps {
-  onOpenInbox: () => void;
   theme: ThemeMode;
   onChangeTheme: (theme: ThemeMode) => void;
 }
 
-export const Footer: React.FC<FooterProps> = ({
-  onOpenInbox,
-  theme,
-  onChangeTheme,
-}) => {
+export const Footer: React.FC<FooterProps> = ({ theme, onChangeTheme }) => {
   const currentYear = new Date().getFullYear();
 
   return (
@@ -57,14 +52,6 @@ export const Footer: React.FC<FooterProps> = ({
             >
               WhatsApp {WHATSAPP_DISPLAY}
             </a>
-
-            <button
-              type="button"
-              onClick={onOpenInbox}
-              className="haptic-tap text-ink-subtle hover:text-accent cursor-pointer"
-            >
-              Studio Inbox
-            </button>
           </div>
         </div>
 

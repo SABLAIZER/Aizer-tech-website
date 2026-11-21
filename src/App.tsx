@@ -119,10 +119,7 @@ export default function App() {
     <MotionConfig reducedMotion="user">
       <ErrorBoundary>
         <div className="min-h-screen bg-canvas text-ink transition-colors duration-200">
-          <Navbar
-            onNavigateContact={() => scrollToSection('contact')}
-            onOpenAdmin={() => setInboxOpen(true)}
-          />
+          <Navbar onNavigateContact={() => scrollToSection('contact')} />
 
           <main>
             <Hero
@@ -148,11 +145,7 @@ export default function App() {
             />
           </main>
 
-          <Footer
-            onOpenInbox={() => setInboxOpen(true)}
-            theme={theme}
-            onChangeTheme={setTheme}
-          />
+          <Footer theme={theme} onChangeTheme={setTheme} />
 
           {/* Compact Floating iOS Glass WhatsApp Quick Action (<= 48px height to respect mobile sticky budget) */}
           <a
