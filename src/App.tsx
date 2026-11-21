@@ -33,13 +33,41 @@ function getInitialTheme(): ThemeMode {
   return 'obsidian';
 }
 
+function isAdminUrlRequested(): boolean {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const hash = window.location.hash.toLowerCase().replace(/\/+$/, '');
+    const pathname = window.location.pathname.toLowerCase().replace(/\/+$/, '');
+    return (
+      hash === '#aizertechgh-admin' ||
+      hash === '#admin' ||
+      pathname === '/aizertechgh-admin' ||
+      pathname === '/admin' ||
+      params.has('admin') ||
+      params.has('aizertechgh-admin')
+    );
+  } catch {
+    return false;
+  }
+}
+
 export default function App() {
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const [selectedService, setSelectedService] = useState<ServiceType>(
     'Business Website (from GHS 800)'
   );
   const [selectedBudget, setSelectedBudget] = useState<BudgetTier>('GHS 800 - 1,500');
-  const [inboxOpen, setInboxOpen] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState<boolean>(isAdminUrlRequested);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      if (isAdminUrlRequested()) {
+        setInboxOpen(true);
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -71,11 +99,30 @@ export default function App() {
     scrollToSection('contact');
   };
 
+  const handleCloseInbox = () => {
+    setInboxOpen(false);
+    try {
+      if (isAdminUrlRequested()) {
+        const lowerPath = window.location.pathname.toLowerCase();
+        const cleanUrl =
+          lowerPath === '/admin' || lowerPath === '/aizertechgh-admin'
+            ? '/'
+            : window.location.pathname;
+        window.history.replaceState(null, '', cleanUrl);
+      }
+    } catch {
+      // Ignore history errors
+    }
+  };
+
   return (
     <MotionConfig reducedMotion="user">
       <ErrorBoundary>
         <div className="min-h-screen bg-canvas text-ink transition-colors duration-200">
-          <Navbar onNavigateContact={() => scrollToSection('contact')} />
+          <Navbar
+            onNavigateContact={() => scrollToSection('contact')}
+            onOpenAdmin={() => setInboxOpen(true)}
+          />
 
           <main>
             <Hero
@@ -121,7 +168,7 @@ export default function App() {
             <span>WhatsApp</span>
           </a>
 
-          <AdminInboxModal open={inboxOpen} onClose={() => setInboxOpen(false)} />
+          <AdminInboxModal open={inboxOpen} onClose={handleCloseInbox} />
         </div>
       </ErrorBoundary>
     </MotionConfig>
