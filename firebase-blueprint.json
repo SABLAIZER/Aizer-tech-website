@@ -1,0 +1,120 @@
+{
+  "entities": {
+    "ContactMessage": {
+      "title": "ContactMessage",
+      "description": "A prospective client inquiry submitted through the Eks Sablaizer DC portfolio contact form.",
+      "type": "object",
+      "properties": {
+        "senderName": {
+          "type": "string",
+          "description": "Full name or company representative name.",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "senderEmail": {
+          "type": "string",
+          "format": "email",
+          "description": "Client email address for project follow-up.",
+          "minLength": 5,
+          "maxLength": 150,
+          "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+        },
+        "senderPhone": {
+          "type": "string",
+          "description": "Optional WhatsApp or phone number.",
+          "minLength": 0,
+          "maxLength": 30
+        },
+        "serviceType": {
+          "type": "string",
+          "description": "Requested service tier or category.",
+          "enum": [
+            "Business Website (from GHS 800)",
+            "Mobile App (from GHS 2,500)",
+            "Food App / Custom Platform",
+            "Consulting & UI/UX"
+          ]
+        },
+        "budgetTier": {
+          "type": "string",
+          "description": "Estimated budget range in GHS.",
+          "enum": [
+            "GHS 800 - 1,500",
+            "GHS 1,500 - 2,500",
+            "GHS 2,500 - 5,000",
+            "GHS 5,000+"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "description": "Project brief and requirements.",
+          "minLength": 10,
+          "maxLength": 2000
+        },
+        "status": {
+          "type": "string",
+          "description": "Inbox triage status.",
+          "enum": [
+            "new",
+            "reviewed",
+            "replied",
+            "archived"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when message was submitted."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when status was last updated."
+        }
+      },
+      "required": [
+        "senderName",
+        "senderEmail",
+        "senderPhone",
+        "serviceType",
+        "budgetTier",
+        "message",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized studio administrator record.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 5,
+          "maxLength": 150
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin"]
+        }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/contactMessages/{messageId}": {
+      "schema": {
+        "$ref": "#/entities/ContactMessage"
+      },
+      "description": "Publicly submittable contact inquiries readable and manageable strictly by the verified studio admin."
+    },
+    "/admins/{adminId}": {
+      "schema": {
+        "$ref": "#/entities/AdminUser"
+      },
+      "description": "Read-only admin authorization lookup documents."
+    }
+  }
+}

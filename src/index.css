@@ -1,0 +1,287 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-display: "Bricolage Grotesque", system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@theme inline {
+  --color-canvas: var(--theme-canvas);
+  --color-surface: var(--theme-surface);
+  --color-surface-elevated: var(--theme-surface-elevated);
+  --color-field: var(--theme-field);
+  --color-footer: var(--theme-footer);
+  --color-ink: var(--theme-ink);
+  --color-ink-secondary: var(--theme-ink-secondary);
+  --color-ink-muted: var(--theme-ink-muted);
+  --color-ink-subtle: var(--theme-ink-subtle);
+  --color-accent: var(--theme-accent);
+  --color-accent-btn: var(--theme-accent-btn);
+  --color-accent-hover: var(--theme-accent-hover);
+  --color-accent-ink: var(--theme-accent-ink);
+  --color-hairline: var(--theme-hairline);
+  --color-hairline-strong: var(--theme-hairline-strong);
+}
+
+:root,
+:root[data-theme="obsidian"] {
+  color-scheme: dark;
+  --theme-canvas: #070708;
+  --theme-surface: #111114;
+  --theme-surface-elevated: #1a1a20;
+  --theme-field: #09090b;
+  --theme-footer: #060607;
+  --theme-header: rgba(7, 7, 8, 0.8);
+  --theme-overlay: rgba(7, 7, 8, 0.96);
+  --theme-ink: #f4f3ef;
+  --theme-ink-secondary: #d4d4d8;
+  --theme-ink-muted: #a1a1aa;
+  --theme-ink-subtle: #8e8e98;
+  --theme-accent: #d4a853;
+  --theme-accent-btn: #d4a853;
+  --theme-accent-hover: #e8c678;
+  --theme-accent-ink: #070708;
+  --theme-hairline: rgba(255, 255, 255, 0.09);
+  --theme-hairline-strong: rgba(255, 255, 255, 0.16);
+  --theme-glow: rgba(212, 168, 83, 0.1);
+}
+
+:root[data-theme="midnight-gold"] {
+  color-scheme: dark;
+  --theme-canvas: #050914;
+  --theme-surface: #0b1222;
+  --theme-surface-elevated: #131d35;
+  --theme-field: #080e1c;
+  --theme-footer: #040710;
+  --theme-header: rgba(5, 9, 20, 0.82);
+  --theme-overlay: rgba(5, 9, 20, 0.96);
+  --theme-ink: #f5f7fc;
+  --theme-ink-secondary: #cbd5e1;
+  --theme-ink-muted: #94a3b8;
+  --theme-ink-subtle: #7c8ca3;
+  --theme-accent: #f4c44e;
+  --theme-accent-btn: #f4c44e;
+  --theme-accent-hover: #fad67a;
+  --theme-accent-ink: #050914;
+  --theme-hairline: rgba(244, 196, 78, 0.15);
+  --theme-hairline-strong: rgba(244, 196, 78, 0.3);
+  --theme-glow: rgba(244, 196, 78, 0.14);
+}
+
+:root[data-theme="light-glass"] {
+  color-scheme: light;
+  --theme-canvas: #eef1f6;
+  --theme-surface: rgba(255, 255, 255, 0.84);
+  --theme-surface-elevated: #ffffff;
+  --theme-field: rgba(255, 255, 255, 0.92);
+  --theme-footer: rgba(240, 243, 248, 0.94);
+  --theme-header: rgba(238, 241, 246, 0.78);
+  --theme-overlay: rgba(238, 241, 246, 0.96);
+  --theme-ink: #0f1219;
+  --theme-ink-secondary: #2b313e;
+  --theme-ink-muted: #525b6c;
+  --theme-ink-subtle: #616b7d;
+  --theme-accent: #9a6808;
+  --theme-accent-btn: #d4a853;
+  --theme-accent-hover: #e3b864;
+  --theme-accent-ink: #0f1219;
+  --theme-hairline: rgba(15, 18, 25, 0.1);
+  --theme-hairline-strong: rgba(15, 18, 25, 0.18);
+  --theme-glow: rgba(212, 168, 83, 0.18);
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--theme-canvas);
+  color: var(--theme-ink);
+  overflow-x: hidden;
+  transition: background-color 220ms ease, color 220ms ease;
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: var(--font-display);
+  line-height: 1.2;
+}
+
+.font-mono-tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.section-ambient {
+  background-image: radial-gradient(
+    ellipse 70% 45% at 80% 0%,
+    var(--theme-glow) 0%,
+    transparent 70%
+  );
+}
+
+.header-glass {
+  background-color: var(--theme-header);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+}
+
+.overlay-glass {
+  background-color: var(--theme-overlay);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+}
+
+.ios-glass {
+  background: linear-gradient(
+    180deg,
+    rgba(28, 28, 33, 0.74) 0%,
+    rgba(16, 16, 20, 0.64) 100%
+  );
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.14),
+    0 24px 54px -18px rgba(0, 0, 0, 0.7);
+}
+
+.ios-glass-subtle {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+}
+
+.ios-glass-gold {
+  background: linear-gradient(
+    180deg,
+    rgba(212, 168, 83, 0.16) 0%,
+    rgba(20, 20, 24, 0.74) 100%
+  );
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgba(212, 168, 83, 0.34);
+  box-shadow:
+    inset 0 1px 0 0 rgba(232, 198, 120, 0.28),
+    0 24px 54px -18px rgba(0, 0, 0, 0.72);
+}
+
+:root[data-theme="midnight-gold"] .ios-glass {
+  background: linear-gradient(
+    180deg,
+    rgba(18, 28, 52, 0.76) 0%,
+    rgba(9, 14, 29, 0.68) 100%
+  );
+  border: 1px solid rgba(244, 196, 78, 0.18);
+  box-shadow:
+    inset 0 1px 0 0 rgba(244, 196, 78, 0.16),
+    0 24px 54px -18px rgba(2, 5, 14, 0.8);
+}
+
+:root[data-theme="midnight-gold"] .ios-glass-subtle {
+  background: linear-gradient(
+    180deg,
+    rgba(244, 196, 78, 0.08) 0%,
+    rgba(19, 29, 53, 0.48) 100%
+  );
+  border: 1px solid rgba(244, 196, 78, 0.2);
+  box-shadow: inset 0 1px 0 0 rgba(244, 196, 78, 0.14);
+}
+
+:root[data-theme="midnight-gold"] .ios-glass-gold {
+  background: linear-gradient(
+    180deg,
+    rgba(244, 196, 78, 0.2) 0%,
+    rgba(11, 18, 34, 0.82) 100%
+  );
+  border: 1px solid rgba(244, 196, 78, 0.42);
+  box-shadow:
+    inset 0 1px 0 0 rgba(250, 214, 122, 0.32),
+    0 24px 54px -18px rgba(2, 5, 14, 0.82);
+}
+
+:root[data-theme="light-glass"] .ios-glass {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.84) 0%,
+    rgba(255, 255, 255, 0.64) 100%
+  );
+  backdrop-filter: blur(26px) saturate(180%);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.98),
+    0 20px 48px -18px rgba(15, 23, 42, 0.12),
+    0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+:root[data-theme="light-glass"] .ios-glass-subtle {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.82) 0%,
+    rgba(246, 248, 252, 0.66) 100%
+  );
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border: 1px solid rgba(15, 18, 25, 0.11);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.95),
+    0 6px 18px -8px rgba(15, 23, 42, 0.08);
+}
+
+:root[data-theme="light-glass"] .ios-glass-gold {
+  background: linear-gradient(
+    180deg,
+    rgba(212, 168, 83, 0.22) 0%,
+    rgba(255, 255, 255, 0.82) 100%
+  );
+  backdrop-filter: blur(24px) saturate(170%);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  border: 1px solid rgba(154, 104, 8, 0.34);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.92),
+    0 20px 44px -18px rgba(154, 104, 8, 0.18);
+}
+
+/* Subtle iOS-style haptic micro-interaction for touch & pointer action buttons */
+.haptic-tap,
+.haptic-tap-sm {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  transition:
+    transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease,
+    opacity 150ms ease;
+  will-change: transform;
+}
+
+.haptic-tap:active:not(:disabled) {
+  transform: scale(0.965);
+}
+
+.haptic-tap-sm:active:not(:disabled) {
+  transform: scale(0.93);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .haptic-tap:active:not(:disabled),
+  .haptic-tap-sm:active:not(:disabled) {
+    transform: none !important;
+  }
+}
