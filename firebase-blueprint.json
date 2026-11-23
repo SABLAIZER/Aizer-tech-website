@@ -101,6 +101,63 @@
         }
       },
       "required": ["email", "role"]
+    },
+    "StudioSettings": {
+      "title": "StudioSettings",
+      "description": "Live public portfolio settings managed exclusively from the private /admin dashboard.",
+      "type": "object",
+      "properties": {
+        "heroHeadline": {
+          "type": "string",
+          "description": "Main hero headline on the public site.",
+          "minLength": 10,
+          "maxLength": 140
+        },
+        "heroSubheadline": {
+          "type": "string",
+          "description": "Hero supporting paragraph.",
+          "minLength": 10,
+          "maxLength": 350
+        },
+        "announcementBanner": {
+          "type": "string",
+          "description": "Optional top announcement notice.",
+          "minLength": 0,
+          "maxLength": 160
+        },
+        "websiteStartingPrice": {
+          "type": "string",
+          "description": "Business website starting price label.",
+          "minLength": 2,
+          "maxLength": 40
+        },
+        "mobileStartingPrice": {
+          "type": "string",
+          "description": "Mobile app starting price label.",
+          "minLength": 2,
+          "maxLength": 40
+        },
+        "founderBio": {
+          "type": "string",
+          "description": "Founder introduction paragraph.",
+          "minLength": 20,
+          "maxLength": 600
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the latest studio edit."
+        }
+      },
+      "required": [
+        "heroHeadline",
+        "heroSubheadline",
+        "announcementBanner",
+        "websiteStartingPrice",
+        "mobileStartingPrice",
+        "founderBio",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -115,6 +172,12 @@
         "$ref": "#/entities/AdminUser"
       },
       "description": "Read-only admin authorization lookup documents."
+    },
+    "/studioSettings/{settingId}": {
+      "schema": {
+        "$ref": "#/entities/StudioSettings"
+      },
+      "description": "Publicly readable, admin-only editable website copy and starting rates."
     }
   }
 }

@@ -83,6 +83,39 @@ export const BUDGET_OPTIONS: BudgetTier[] = [
   'GHS 5,000+',
 ];
 
+export interface StudioSettings {
+  heroHeadline: string;
+  heroSubheadline: string;
+  announcementBanner: string;
+  websiteStartingPrice: string;
+  mobileStartingPrice: string;
+  founderBio: string;
+  updatedAt?: { seconds: number; nanoseconds: number } | null;
+}
+
+export const DEFAULT_STUDIO_SETTINGS: StudioSettings = {
+  heroHeadline: 'Luxury digital products engineered for modern businesses.',
+  heroSubheadline:
+    'Aizer Tech crafts high-converting business websites starting from GHS 800 and bespoke iOS & Android mobile apps starting from GHS 2,500—built in Accra for discerning local and international brands.',
+  announcementBanner: '',
+  websiteStartingPrice: 'From GHS 800',
+  mobileStartingPrice: 'From GHS 2,500',
+  founderBio:
+    'Aizer Tech was built in Accra on a straightforward principle: local businesses and emerging brands deserve international-grade websites and mobile software without inflated agency retainers.',
+};
+
+export const STUDIO_SETTINGS_LIMITS = {
+  MIN_HERO_HEADLINE: 10,
+  MAX_HERO_HEADLINE: 140,
+  MIN_HERO_SUBHEADLINE: 10,
+  MAX_HERO_SUBHEADLINE: 350,
+  MAX_ANNOUNCEMENT: 160,
+  MIN_PRICE_LABEL: 2,
+  MAX_PRICE_LABEL: 40,
+  MIN_FOUNDER_BIO: 20,
+  MAX_FOUNDER_BIO: 600,
+} as const;
+
 export const VALIDATION_LIMITS = {
   MIN_NAME_LEN: 2,
   MAX_NAME_LEN: 100,

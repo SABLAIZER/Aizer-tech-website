@@ -1,24 +1,37 @@
 import React from 'react';
-import { ArrowUpRight, MessageCircle } from 'lucide-react';
+import { ArrowUpRight, MessageCircle, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
-import { buildWhatsAppUrl, WHATSAPP_DISPLAY } from '../types';
+import { buildWhatsAppUrl, StudioSettings, WHATSAPP_DISPLAY } from '../types';
 import { BrandMark } from './BrandMark';
 
 interface HeroProps {
+  settings: StudioSettings;
   onStartProject: () => void;
   onExplorePortfolio: () => void;
 }
 
 export const Hero: React.FC<HeroProps> = ({
+  settings,
   onStartProject,
   onExplorePortfolio,
 }) => {
+  const cleanWebRate = settings.websiteStartingPrice.replace(/^From\s+/i, '');
+  const cleanMobileRate = settings.mobileStartingPrice.replace(/^From\s+/i, '');
+  const announcement = settings.announcementBanner.trim();
+
   return (
     <section
       id="top"
       className="section-ambient pt-8 pb-14 sm:pt-14 sm:pb-16 lg:pt-20 lg:pb-24 border-b border-hairline"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10">
+        {announcement && (
+          <div className="mb-6 sm:mb-8 rounded-xl ios-glass-gold px-4 py-3 flex items-start sm:items-center gap-2.5 text-xs sm:text-sm text-ink">
+            <Sparkles className="w-4 h-4 text-accent shrink-0 mt-0.5 sm:mt-0" />
+            <p className="leading-relaxed">{announcement}</p>
+          </div>
+        )}
+
         {/* Split-Screen Hero */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 sm:gap-10 lg:gap-12 items-stretch">
           {/* Left Column: Typographic Proposition */}
@@ -37,19 +50,11 @@ export const Hero: React.FC<HeroProps> = ({
               </p>
 
               <h1 className="font-display text-[1.85rem] sm:text-4xl lg:text-[3.4rem] font-semibold tracking-tight text-ink leading-[1.2] break-words mb-5 sm:mb-6">
-                Luxury digital products engineered for modern businesses.
+                {settings.heroHeadline}
               </h1>
 
               <p className="text-[15px] sm:text-base lg:text-lg text-ink-secondary leading-relaxed max-w-2xl mb-8 sm:mb-10">
-                Aizer Tech crafts high-converting business websites starting from{' '}
-                <span className="text-ink font-semibold font-mono-tabular whitespace-nowrap">
-                  GHS 800
-                </span>{' '}
-                and bespoke iOS &amp; Android mobile apps starting from{' '}
-                <span className="text-ink font-semibold font-mono-tabular whitespace-nowrap">
-                  GHS 2,500
-                </span>
-                —built in Accra for discerning local and international brands.
+                {settings.heroSubheadline}
               </p>
             </div>
 
@@ -118,7 +123,7 @@ export const Hero: React.FC<HeroProps> = ({
                       Tier 01 · Business Web
                     </span>
                     <span className="font-mono-tabular text-sm font-semibold text-accent">
-                      From GHS 800
+                      {settings.websiteStartingPrice}
                     </span>
                   </div>
                   <p className="text-sm font-medium text-ink leading-snug mb-1.5">
@@ -135,7 +140,7 @@ export const Hero: React.FC<HeroProps> = ({
                       Tier 02 · Mobile &amp; Food Apps
                     </span>
                     <span className="font-mono-tabular text-sm font-semibold text-ink">
-                      From GHS 2,500
+                      {settings.mobileStartingPrice}
                     </span>
                   </div>
                   <p className="text-sm font-medium text-ink leading-snug mb-1.5">
@@ -172,7 +177,7 @@ export const Hero: React.FC<HeroProps> = ({
         >
           <div className="min-w-0">
             <p className="font-mono-tabular text-2xl lg:text-3xl font-semibold text-ink leading-[1.2]">
-              GHS 800
+              {cleanWebRate}
             </p>
             <p className="text-sm text-ink-muted mt-1.5">
               Business websites starting rate
@@ -180,7 +185,7 @@ export const Hero: React.FC<HeroProps> = ({
           </div>
           <div className="min-w-0">
             <p className="font-mono-tabular text-2xl lg:text-3xl font-semibold text-ink leading-[1.2]">
-              GHS 2,500
+              {cleanMobileRate}
             </p>
             <p className="text-sm text-ink-muted mt-1.5">
               Mobile applications starting rate

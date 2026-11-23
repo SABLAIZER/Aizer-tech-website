@@ -34,11 +34,11 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen bg-canvas text-ink flex items-center justify-center px-6 py-12">
-          <div className="ios-glass max-w-lg w-full rounded-2xl p-8">
-            <p className="text-xs text-accent font-medium mb-3">
+          <div className="bg-surface border border-hairline-strong max-w-lg w-full rounded-2xl p-8">
+            <p className="text-xs font-medium text-neon mb-3">
               Application Recovery
             </p>
-            <h1 className="font-display text-2xl font-semibold tracking-tight text-ink mb-3">
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-white mb-3">
               Something went wrong while rendering this view.
             </h1>
             <p className="text-sm text-ink-muted leading-relaxed mb-6 break-words">
@@ -47,7 +47,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <button
               type="button"
               onClick={this.handleReset}
-              className="haptic-tap px-5 py-2.5 rounded-lg bg-accent-btn text-accent-ink text-sm font-semibold hover:bg-accent-hover cursor-pointer"
+              className="tap-feedback px-5 py-2.5 rounded-lg bg-neon text-neon-ink text-sm font-semibold hover:bg-neon-hover cursor-pointer"
             >
               Restore Interface
             </button>

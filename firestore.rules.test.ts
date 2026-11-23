@@ -15,6 +15,16 @@ export interface ContactMessagePayload {
   updatedAt: unknown;
 }
 
+export interface StudioSettingsPayload {
+  heroHeadline: string;
+  heroSubheadline: string;
+  announcementBanner: string;
+  websiteStartingPrice: string;
+  mobileStartingPrice: string;
+  founderBio: string;
+  updatedAt: unknown;
+}
+
 export const dirtyDozenPayloads = [
   { name: 'Unauthenticated list on /contactMessages', expected: 'PERMISSION_DENIED' },
   { name: 'Non-admin get on /contactMessages/{id}', expected: 'PERMISSION_DENIED' },
@@ -28,4 +38,7 @@ export const dirtyDozenPayloads = [
   { name: 'Create with invalid document ID', expected: 'PERMISSION_DENIED' },
   { name: 'Admin update mutating senderEmail', expected: 'PERMISSION_DENIED' },
   { name: 'Client write to /admins/{uid}', expected: 'PERMISSION_DENIED' },
+  { name: 'Non-admin write to /studioSettings/public', expected: 'PERMISSION_DENIED' },
+  { name: 'Unauthenticated list on /studioSettings', expected: 'PERMISSION_DENIED' },
+  { name: 'Admin write to /studioSettings/public with oversized field', expected: 'PERMISSION_DENIED' },
 ] as const;

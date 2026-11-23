@@ -19,16 +19,16 @@ export const BrandMark: React.FC<BrandMarkProps> = ({ size = 'sm' }) => {
     return (
       <span
         aria-hidden="true"
-        className={`${dims} bg-[#070708] border border-accent/50 inline-flex items-center justify-center shrink-0 shadow-sm`}
+        className={`${dims} bg-[#050507] border border-neon/45 inline-flex items-center justify-center shrink-0`}
       >
         <svg viewBox="0 0 32 32" className="w-5 h-5" fill="none">
           <path
             d="M16 4L5 27h4.2l2.4-5.2h8.8L22.8 27H27L16 4zm-2.6 14L16 11.8 18.6 18h-5.2z"
-            fill="#D4A853"
+            fill="#00FF88"
           />
           <path
             d="M11 26L23 6"
-            stroke="#F4F3EF"
+            stroke="#FFFFFF"
             strokeWidth="1.6"
             strokeLinecap="round"
           />
@@ -40,10 +40,10 @@ export const BrandMark: React.FC<BrandMarkProps> = ({ size = 'sm' }) => {
   return (
     <img
       src={AIZER_LOGO_URL}
-      alt="Aizer Tech emblem"
+      alt="AizerTech GH emblem"
       referrerPolicy="no-referrer"
       onError={() => setImgFailed(true)}
-      className={`${dims} object-cover border border-accent/45 shrink-0 shadow-sm bg-[#070708]`}
+      className={`${dims} object-cover border border-neon/40 shrink-0 bg-[#050507]`}
     />
   );
 };

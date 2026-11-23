@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
 import { MapPin, MessageCircle } from 'lucide-react';
-import { buildWhatsAppUrl, FOUNDER_PORTRAIT_URL } from '../types';
+import { buildWhatsAppUrl, FOUNDER_PORTRAIT_URL, StudioSettings } from '../types';
 import { Reveal } from './Reveal';
 
-export const FounderSection: React.FC = () => {
+interface FounderSectionProps {
+  settings: StudioSettings;
+}
+
+export const FounderSection: React.FC<FounderSectionProps> = ({ settings }) => {
   const [portraitFailed, setPortraitFailed] = useState(false);
 
   return (
@@ -67,16 +71,16 @@ export const FounderSection: React.FC = () => {
                 Founded by Sablaizer - Evans Kwaku Sablah from Accra
               </h2>
               <p className="text-sm sm:text-base text-ink-secondary leading-relaxed mb-5">
-                Aizer Tech was built in Accra on a straightforward principle: local businesses and emerging brands deserve international-grade websites and mobile software without inflated agency retainers.
+                {settings.founderBio}
               </p>
               <p className="text-sm sm:text-base text-ink-secondary leading-relaxed mb-8">
-                Every website (from{' '}
+                Every website (
                 <span className="text-ink font-mono-tabular font-semibold whitespace-nowrap">
-                  GHS 800
+                  {settings.websiteStartingPrice}
                 </span>
-                ) and mobile application (from{' '}
+                ) and mobile application (
                 <span className="text-ink font-mono-tabular font-semibold whitespace-nowrap">
-                  GHS 2,500
+                  {settings.mobileStartingPrice}
                 </span>
                 ) is architected with clean code, Mobile Money readiness, and direct founder accountability from kickoff to launch.
               </p>

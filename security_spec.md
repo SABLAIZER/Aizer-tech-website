@@ -6,8 +6,9 @@
 3. PII Isolation: `senderEmail`, `senderPhone`, and `message` are strictly private. Only verified studio administrators (`sablahevans0@gmail.com` with `email_verified == true`) may `get`, `list`, `update`, or `delete` contact messages.
 4. Updates to `/contactMessages/{messageId}` by an admin may only mutate `status` and `updatedAt` (with `updatedAt == request.time`). Original message content and `createdAt` remain immutable.
 5. `/admins/{adminId}` cannot be written from client SDKs; only verified admins can `get` their own or admin records.
+6. `/studioSettings/public` stores live public studio copy (`heroHeadline`, `heroSubheadline`, `announcementBanner`, `websiteStartingPrice`, `mobileStartingPrice`, `founderBio`, `updatedAt`). Visitors may `get` only the exact `public` doc ID (`list` and `delete` are denied). Only verified admins (`sablahevans0@gmail.com` with `email_verified == true`) may `create` or `update` `/studioSettings/public`, subject to strict key/length validation and `updatedAt == request.time`.
 
-## 2. Adversarial Payloads ("Dirty Dozen")
+## 2. Adversarial Payloads ("Dirty Dozen+")
 1. Unauthenticated `list` on `/contactMessages` -> `PERMISSION_DENIED`
 2. Authenticated non-admin `get` on `/contactMessages/{id}` -> `PERMISSION_DENIED`
 3. Unverified email claiming `sablahevans0@gmail.com` (`email_verified: false`) reading `/contactMessages` -> `PERMISSION_DENIED`
@@ -20,3 +21,6 @@
 10. Contact message create with invalid `messageId` containing spaces or >128 chars -> `PERMISSION_DENIED`
 11. Admin update attempting to alter `senderEmail` or `message` -> `PERMISSION_DENIED`
 12. Non-admin attempting to write `/admins/{uid}` -> `PERMISSION_DENIED`
+13. Unauthenticated or non-admin attempting to `create`, `update`, or `delete` `/studioSettings/public` -> `PERMISSION_DENIED`
+14. Unauthenticated `list` on `/studioSettings` or `get` on `/studioSettings/private` -> `PERMISSION_DENIED`
+15. Admin write to `/studioSettings/public` with oversized `heroHeadline` (>140 chars) or extra unapproved field -> `PERMISSION_DENIED`

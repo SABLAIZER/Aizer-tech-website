@@ -1,9 +1,15 @@
 import React from 'react';
 import { ArrowUpRight, MessageCircle, Wallet } from 'lucide-react';
-import { BudgetTier, buildWhatsAppUrl, ServiceType } from '../types';
+import {
+  BudgetTier,
+  buildWhatsAppUrl,
+  ServiceType,
+  StudioSettings,
+} from '../types';
 import { Reveal } from './Reveal';
 
 interface ServicesSectionProps {
+  settings: StudioSettings;
   onSelectService: (service: ServiceType, budget: BudgetTier) => void;
 }
 
@@ -87,8 +93,17 @@ const SERVICES: ServiceItem[] = [
 ];
 
 export const ServicesSection: React.FC<ServicesSectionProps> = ({
+  settings,
   onSelectService,
 }) => {
+  const getStartingPrice = (service: ServiceItem): string => {
+    if (service.number === '01.') return settings.websiteStartingPrice;
+    if (service.number === '02.' || service.number === '03.') {
+      return settings.mobileStartingPrice;
+    }
+    return service.startingPrice;
+  };
+
   return (
     <section
       id="services"
@@ -123,6 +138,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({
                 : index === 2
                 ? 'lg:col-span-7'
                 : 'lg:col-span-5';
+            const displayPrice = getStartingPrice(service);
 
             return (
               <Reveal
@@ -143,7 +159,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({
                         </h3>
                       </div>
                       <span className="font-mono-tabular text-sm sm:text-base font-semibold text-accent sm:whitespace-nowrap shrink-0">
-                        {service.startingPrice}
+                        {displayPrice}
                       </span>
                     </div>
 
@@ -184,7 +200,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({
 
                     <a
                       href={buildWhatsAppUrl(
-                        `Hello Aizer Tech, I am interested in ${service.title} (${service.startingPrice}).`
+                        `Hello Aizer Tech, I am interested in ${service.title} (${displayPrice}).`
                       )}
                       target="_blank"
                       rel="noopener noreferrer"

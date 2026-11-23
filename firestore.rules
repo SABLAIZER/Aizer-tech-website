@@ -103,6 +103,45 @@ service cloud.firestore {
       allow delete: if isValidId(messageId) && isAdmin();
     }
 
+    function isValidStudioSettings(data) {
+      return data.keys().hasAll([
+          'heroHeadline',
+          'heroSubheadline',
+          'announcementBanner',
+          'websiteStartingPrice',
+          'mobileStartingPrice',
+          'founderBio',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'heroHeadline',
+          'heroSubheadline',
+          'announcementBanner',
+          'websiteStartingPrice',
+          'mobileStartingPrice',
+          'founderBio',
+          'updatedAt'
+        ]) &&
+        data.heroHeadline is string && data.heroHeadline.size() >= 10 && data.heroHeadline.size() <= 140 &&
+        data.heroSubheadline is string && data.heroSubheadline.size() >= 10 && data.heroSubheadline.size() <= 350 &&
+        data.announcementBanner is string && data.announcementBanner.size() <= 160 &&
+        data.websiteStartingPrice is string && data.websiteStartingPrice.size() >= 2 && data.websiteStartingPrice.size() <= 40 &&
+        data.mobileStartingPrice is string && data.mobileStartingPrice.size() >= 2 && data.mobileStartingPrice.size() <= 40 &&
+        data.founderBio is string && data.founderBio.size() >= 20 && data.founderBio.size() <= 600 &&
+        data.updatedAt is timestamp;
+    }
+
+    match /studioSettings/{settingId} {
+      allow get: if isValidId(settingId) && settingId == 'public';
+      allow list: if false;
+      allow create, update: if isValidId(settingId) &&
+        settingId == 'public' &&
+        isAdmin() &&
+        isValidStudioSettings(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
     match /admins/{adminId} {
       allow get: if isValidId(adminId) && isAdmin();
       allow list, create, update, delete: if false;
