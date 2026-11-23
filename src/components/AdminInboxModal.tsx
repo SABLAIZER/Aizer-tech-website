@@ -192,6 +192,23 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
     return messages.filter((msg) => msg.status === statusFilter);
   }, [messages, statusFilter]);
 
+  const formatAuthError = (error: unknown): string => {
+    const raw = error instanceof Error ? error.message : String(error || 'Sign-in cancelled.');
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code)
+        : '';
+
+    if (code === 'auth/unauthorized-domain' || raw.includes('auth/unauthorized-domain')) {
+      const host = typeof window !== 'undefined' ? window.location.hostname : 'this domain';
+      return `This domain (${host}) is not whitelisted yet in Firebase. Open Firebase Console → project "aizerchat" → Authentication → Settings → Authorized domains → Add domain → enter "${host}".`;
+    }
+    if (code === 'auth/popup-blocked' || raw.includes('auth/popup-blocked')) {
+      return 'Pop-up was blocked by your browser. In iPhone Settings → Safari, turn off "Block Pop-ups" or tap Allow when Safari asks, then tap Sign in with Google again.';
+    }
+    return raw;
+  };
+
   const handleSignIn = async () => {
     setAuthError(null);
     try {
@@ -199,8 +216,7 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
       setUser(result.user);
       setHasGmailToken(Boolean(result.accessToken));
     } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Sign-in cancelled.';
-      setAuthError(msg);
+      setAuthError(formatAuthError(error));
     }
   };
 
@@ -211,8 +227,7 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
       setUser(signedUser);
       setHasGmailToken(false);
     } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Sign-in cancelled.';
-      setAuthError(msg);
+      setAuthError(formatAuthError(error));
     }
   };
 
