@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 
-interface RevealProps {
+export interface RevealProps {
   children: React.ReactNode;
   delay?: number;
   yOffset?: number;
