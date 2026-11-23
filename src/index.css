@@ -6,36 +6,108 @@
   --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
-  --color-canvas: #050507;
-  --color-surface: #0c0c10;
-  --color-surface-elevated: #13131a;
-  --color-field: #08080b;
-  --color-ink: #ffffff;
-  --color-ink-secondary: #e4e4e7;
-  --color-ink-muted: #a1a1aa;
-  --color-ink-subtle: #71717a;
-  --color-neon: #00ff88;
-  --color-neon-hover: #33ff9f;
-  --color-neon-ink: #04120a;
-  --color-hairline: rgba(255, 255, 255, 0.09);
-  --color-hairline-strong: rgba(255, 255, 255, 0.16);
+  --color-canvas: var(--theme-canvas);
+  --color-surface: var(--theme-surface);
+  --color-surface-elevated: var(--theme-surface-elevated);
+  --color-field: var(--theme-field);
+  --color-ink: var(--theme-ink);
+  --color-ink-secondary: var(--theme-ink-secondary);
+  --color-ink-muted: var(--theme-ink-muted);
+  --color-ink-subtle: var(--theme-ink-subtle);
+  --color-accent: var(--theme-accent);
+  --color-accent-btn: var(--theme-accent-btn);
+  --color-accent-hover: var(--theme-accent-hover);
+  --color-accent-ink: var(--theme-accent-ink);
+  --color-hairline: var(--theme-hairline);
+  --color-hairline-strong: var(--theme-hairline-strong);
 }
 
-:root {
+:root,
+[data-theme="obsidian"] {
   color-scheme: dark;
+  --theme-canvas: #070708;
+  --theme-surface: #0e0e11;
+  --theme-surface-elevated: #17171d;
+  --theme-field: #0b0b0e;
+  --theme-ink: #f4f3ef;
+  --theme-ink-secondary: #d4d4d8;
+  --theme-ink-muted: #9c9ca6;
+  --theme-ink-subtle: #6b6b76;
+  --theme-accent: #d4a853;
+  --theme-accent-btn: #d4a853;
+  --theme-accent-hover: #e8c678;
+  --theme-accent-ink: #070708;
+  --theme-hairline: rgba(255, 255, 255, 0.09);
+  --theme-hairline-strong: rgba(255, 255, 255, 0.16);
+  --glass-bg: rgba(22, 22, 27, 0.68);
+  --glass-subtle-bg: rgba(255, 255, 255, 0.04);
+  --glass-gold-bg: linear-gradient(135deg, rgba(212, 168, 83, 0.14), rgba(22, 22, 27, 0.72));
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-gold-border: rgba(212, 168, 83, 0.36);
+  --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 24px 56px -18px rgba(0, 0, 0, 0.65);
+  --ambient-glow: radial-gradient(ellipse 60% 45% at 80% 10%, rgba(212, 168, 83, 0.09) 0%, transparent 70%);
+}
+
+[data-theme="midnight-gold"] {
+  color-scheme: dark;
+  --theme-canvas: #0b1222;
+  --theme-surface: #111a2f;
+  --theme-surface-elevated: #18233d;
+  --theme-field: #0e1629;
+  --theme-ink: #f5f6fa;
+  --theme-ink-secondary: #d2d8e6;
+  --theme-ink-muted: #98a4be;
+  --theme-ink-subtle: #6f7c99;
+  --theme-accent: #e0b45c;
+  --theme-accent-btn: #e0b45c;
+  --theme-accent-hover: #f0ca7b;
+  --theme-accent-ink: #080d1a;
+  --theme-hairline: rgba(255, 255, 255, 0.1);
+  --theme-hairline-strong: rgba(255, 255, 255, 0.18);
+  --glass-bg: rgba(19, 29, 52, 0.7);
+  --glass-subtle-bg: rgba(255, 255, 255, 0.05);
+  --glass-gold-bg: linear-gradient(135deg, rgba(224, 180, 92, 0.16), rgba(19, 29, 52, 0.74));
+  --glass-border: rgba(255, 255, 255, 0.13);
+  --glass-gold-border: rgba(224, 180, 92, 0.42);
+  --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 24px 56px -18px rgba(3, 8, 22, 0.72);
+  --ambient-glow: radial-gradient(ellipse 65% 45% at 75% 8%, rgba(224, 180, 92, 0.11) 0%, transparent 72%);
+}
+
+[data-theme="light-glass"] {
+  color-scheme: light;
+  --theme-canvas: #eef1f6;
+  --theme-surface: #ffffff;
+  --theme-surface-elevated: #f6f8fb;
+  --theme-field: #f8fafc;
+  --theme-ink: #11131a;
+  --theme-ink-secondary: #343946;
+  --theme-ink-muted: #5b6273;
+  --theme-ink-subtle: #788092;
+  --theme-accent: #9f7017;
+  --theme-accent-btn: #d4a853;
+  --theme-accent-hover: #c5953c;
+  --theme-accent-ink: #11131a;
+  --theme-hairline: rgba(17, 19, 26, 0.1);
+  --theme-hairline-strong: rgba(17, 19, 26, 0.18);
+  --glass-bg: rgba(255, 255, 255, 0.76);
+  --glass-subtle-bg: rgba(17, 19, 26, 0.04);
+  --glass-gold-bg: linear-gradient(135deg, rgba(212, 168, 83, 0.18), rgba(255, 255, 255, 0.84));
+  --glass-border: rgba(17, 19, 26, 0.1);
+  --glass-gold-border: rgba(159, 112, 23, 0.35);
+  --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 20px 48px -18px rgba(17, 23, 38, 0.14);
+  --ambient-glow: radial-gradient(ellipse 65% 45% at 80% 10%, rgba(212, 168, 83, 0.14) 0%, transparent 72%);
 }
 
 body {
   font-family: var(--font-sans);
-  background-color: #050507;
-  color: #ffffff;
+  background-color: var(--theme-canvas);
+  color: var(--theme-ink);
   overflow-x: hidden;
-  letter-spacing: 0.005em;
+  letter-spacing: 0.004em;
 }
 
 h1, h2, h3, h4, .font-display {
   font-family: var(--font-display);
-  line-height: 1.15;
 }
 
 .font-mono-tabular {
@@ -43,19 +115,41 @@ h1, h2, h3, h4, .font-display {
   font-variant-numeric: tabular-nums;
 }
 
+.section-ambient {
+  background-image: var(--ambient-glow);
+}
+
 .header-blur {
-  background-color: rgba(5, 5, 7, 0.84);
-  backdrop-filter: blur(20px) saturate(150%);
-  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  background-color: color-mix(in srgb, var(--theme-canvas) 82%, transparent);
+  backdrop-filter: blur(22px) saturate(165%);
+  -webkit-backdrop-filter: blur(22px) saturate(165%);
 }
 
-.hero-ambient {
-  background-image:
-    radial-gradient(ellipse 65% 45% at 75% 10%, rgba(0, 255, 136, 0.09) 0%, transparent 70%),
-    radial-gradient(ellipse 50% 40% at 15% 0%, rgba(255, 255, 255, 0.03) 0%, transparent 65%);
+.ios-glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(24px) saturate(165%);
+  -webkit-backdrop-filter: blur(24px) saturate(165%);
 }
 
-.tap-feedback {
+.ios-glass-subtle {
+  background: var(--glass-subtle-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+
+.ios-glass-gold {
+  background: var(--glass-gold-bg);
+  border: 1px solid var(--glass-gold-border);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(22px) saturate(165%);
+  -webkit-backdrop-filter: blur(22px) saturate(165%);
+}
+
+.haptic-tap,
+.haptic-tap-sm {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   transition:
@@ -66,8 +160,12 @@ h1, h2, h3, h4, .font-display {
     opacity 150ms ease;
 }
 
-.tap-feedback:active:not(:disabled) {
-  transform: scale(0.97);
+.haptic-tap:active:not(:disabled) {
+  transform: scale(0.975);
+}
+
+.haptic-tap-sm:active:not(:disabled) {
+  transform: scale(0.96);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -79,7 +177,8 @@ h1, h2, h3, h4, .font-display {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-  .tap-feedback:active:not(:disabled) {
+  .haptic-tap:active:not(:disabled),
+  .haptic-tap-sm:active:not(:disabled) {
     transform: none !important;
   }
 }

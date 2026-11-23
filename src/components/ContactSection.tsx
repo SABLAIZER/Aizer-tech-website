@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import {
   AlertCircle,
@@ -7,97 +7,63 @@ import {
   MapPin,
   MessageCircle,
   Send,
-  WifiOff,
 } from 'lucide-react';
-import {
-  db,
-  getOfflineOutbox,
-  isLikelyOfflineError,
-  saveToOfflineOutbox,
-  syncOfflineOutbox,
-} from '../firebase';
+import { db } from '../firebase';
 import {
   BUDGET_OPTIONS,
-  BudgetOption,
+  BudgetTier,
   buildWhatsAppUrl,
-  CONTACT_SERVICE_OPTIONS,
-  isUsableWhatsAppNumber,
-  ServiceOption,
+  SERVICE_OPTIONS,
+  ServiceType,
   VALIDATION_LIMITS,
+  WHATSAPP_DISPLAY,
 } from '../types';
 import { Reveal } from './Reveal';
 
 interface ContactSectionProps {
-  selectedService: ServiceOption;
-  selectedBudget: BudgetOption;
-  prefillNote: string;
-  whatsappNumber: string;
-  onChangeService: (service: ServiceOption) => void;
-  onChangeBudget: (budget: BudgetOption) => void;
+  selectedService: ServiceType;
+  selectedBudget: BudgetTier;
+  onChangeService: (service: ServiceType) => void;
+  onChangeBudget: (budget: BudgetTier) => void;
 }
 
 export const ContactSection: React.FC<ContactSectionProps> = ({
   selectedService,
   selectedBudget,
-  prefillNote,
-  whatsappNumber,
   onChangeService,
   onChangeBudget,
 }) => {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  const [senderName, setSenderName] = useState('');
+  const [senderEmail, setSenderEmail] = useState('');
+  const [senderPhone, setSenderPhone] = useState('');
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitState, setSubmitState] = useState<{
-    type: 'idle' | 'success' | 'offline-queued' | 'error';
+    type: 'idle' | 'success' | 'error';
     text: string;
   }>({ type: 'idle', text: '' });
-  const [pendingOfflineCount, setPendingOfflineCount] = useState<number>(
-    () => getOfflineOutbox().length
-  );
-
-  useEffect(() => {
-    if (prefillNote && !message.trim()) {
-      setMessage(prefillNote);
-    }
-  }, [prefillNote]);
-
-  useEffect(() => {
-    const attemptSync = async () => {
-      const synced = await syncOfflineOutbox();
-      setPendingOfflineCount(getOfflineOutbox().length);
-      if (synced > 0) {
-        setSubmitState({
-          type: 'success',
-          text: 'Message Sent Successfully! AizerTech will reply soon.',
-        });
-      }
-    };
-
-    void attemptSync();
-    window.addEventListener('online', attemptSync);
-    return () => window.removeEventListener('online', attemptSync);
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitState({ type: 'idle', text: '' });
 
-    const cleanName = name.trim();
-    const cleanEmail = email.trim();
-    const cleanPhone = phone.trim();
+    const cleanName = senderName.trim();
+    const cleanEmail = senderEmail.trim();
+    const cleanPhone = senderPhone.trim();
     const cleanMessage = message.trim();
 
     if (cleanName.length < VALIDATION_LIMITS.MIN_NAME_LEN) {
       setSubmitState({
         type: 'error',
-        text: 'Please enter your full name (at least 2 characters).',
+        text: `Please enter your name (at least ${VALIDATION_LIMITS.MIN_NAME_LEN} characters).`,
       });
       return;
     }
 
-    if (!VALIDATION_LIMITS.EMAIL_REGEX.test(cleanEmail)) {
+    if (
+      cleanEmail.length < VALIDATION_LIMITS.MIN_EMAIL_LEN ||
+      !VALIDATION_LIMITS.EMAIL_REGEX.test(cleanEmail)
+    ) {
       setSubmitState({
         type: 'error',
         text: 'Please enter a valid email address.',
@@ -105,10 +71,10 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
       return;
     }
 
-    if (cleanPhone.length < VALIDATION_LIMITS.MIN_PHONE_LEN) {
+    if (cleanPhone.length > VALIDATION_LIMITS.MAX_PHONE_LEN) {
       setSubmitState({
         type: 'error',
-        text: 'Please enter a valid phone or WhatsApp number.',
+        text: `Phone number must be ${VALIDATION_LIMITS.MAX_PHONE_LEN} characters or fewer.`,
       });
       return;
     }
@@ -116,7 +82,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
     if (cleanMessage.length < VALIDATION_LIMITS.MIN_MESSAGE_LEN) {
       setSubmitState({
         type: 'error',
-        text: 'Please describe your project (at least 5 characters).',
+        text: `Please describe your project (at least ${VALIDATION_LIMITS.MIN_MESSAGE_LEN} characters).`,
       });
       return;
     }
@@ -127,155 +93,93 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
     const boundedMessage = cleanMessage.slice(0, VALIDATION_LIMITS.MAX_MESSAGE_LEN);
 
     setSubmitting(true);
-
     try {
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-        saveToOfflineOutbox({
-          localId: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          name: boundedName,
-          email: boundedEmail,
-          phone: boundedPhone,
-          service: selectedService,
-          budget: selectedBudget,
-          message: boundedMessage,
-          queuedAt: new Date().toISOString(),
-        });
-        setPendingOfflineCount(getOfflineOutbox().length);
-        setName('');
-        setEmail('');
-        setPhone('');
-        setMessage('');
-        setSubmitState({
-          type: 'offline-queued',
-          text: 'You appear offline. Your message was saved on your device and will automatically sync to AizerTech once you are back online.',
-        });
-        return;
-      }
-
-      await addDoc(collection(db, 'aizertech_messages'), {
-        name: boundedName,
-        email: boundedEmail,
-        phone: boundedPhone,
-        service: selectedService,
-        budget: selectedBudget,
+      await addDoc(collection(db, 'contactMessages'), {
+        senderName: boundedName,
+        senderEmail: boundedEmail,
+        senderPhone: boundedPhone,
+        serviceType: selectedService,
+        budgetTier: selectedBudget,
         message: boundedMessage,
         status: 'new',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
 
-      setName('');
-      setEmail('');
-      setPhone('');
+      setSenderName('');
+      setSenderEmail('');
+      setSenderPhone('');
       setMessage('');
       setSubmitState({
         type: 'success',
-        text: 'Message Sent Successfully! AizerTech will reply soon.',
+        text: 'Thank you! Your brief has been saved and Sablaizer will respond shortly.',
       });
     } catch (error) {
-      if (isLikelyOfflineError(error)) {
-        saveToOfflineOutbox({
-          localId: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          name: boundedName,
-          email: boundedEmail,
-          phone: boundedPhone,
-          service: selectedService,
-          budget: selectedBudget,
-          message: boundedMessage,
-          queuedAt: new Date().toISOString(),
-        });
-        setPendingOfflineCount(getOfflineOutbox().length);
-        setName('');
-        setEmail('');
-        setPhone('');
-        setMessage('');
-        setSubmitState({
-          type: 'offline-queued',
-          text: 'Connection is offline. Your message was saved locally and will automatically sync to AizerTech when internet returns.',
-        });
-      } else {
-        const realMessage =
-          error instanceof Error
-            ? error.message
-            : 'Unable to save your message. Please try again.';
-        setSubmitState({
-          type: 'error',
-          text: `Failed to send message: ${realMessage}`,
-        });
-      }
+      const msg =
+        error instanceof Error
+          ? error.message
+          : 'Could not submit your inquiry right now. Please try WhatsApp below.';
+      setSubmitState({
+        type: 'error',
+        text: `Unable to send brief: ${msg}`,
+      });
     } finally {
       setSubmitting(false);
     }
   };
 
-  const hasValidWhatsApp = isUsableWhatsAppNumber(whatsappNumber);
-
   return (
-    <section id="contact" className="py-16 sm:py-24 bg-canvas">
+    <section id="contact" className="py-16 sm:py-20 lg:py-28 bg-canvas">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-start">
-          <div className="lg:col-span-5">
+          <div className="lg:col-span-5 min-w-0">
             <Reveal>
-              <p className="text-xs font-medium text-neon mb-2">
-                Start a Conversation
+              <p className="text-sm text-accent font-medium mb-3">
+                Start Your Project
               </p>
-              <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-white [text-wrap:balance]">
-                Tell Us What You Want to Launch
+              <h2 className="font-display text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight text-ink leading-[1.2] mb-4">
+                Request a quote or send your project brief.
               </h2>
-              <p className="mt-4 text-sm sm:text-base text-ink-muted leading-relaxed">
-                Send your project brief below. Your inquiry goes directly into
-                Sablaizer&apos;s AizerTech GH inbox in real time.
+              <p className="text-sm sm:text-base text-ink-secondary leading-relaxed mb-8">
+                Every inquiry goes straight to Sablaizer&apos;s private Aizer Tech inbox in Accra. Most project quotes are returned within the same business day.
               </p>
 
-              <div className="mt-8 space-y-4 pt-6 border-t border-hairline">
+              <div className="space-y-4 pt-6 border-t border-hairline">
                 <div className="flex items-start gap-3">
-                  <MapPin className="w-5 h-5 text-neon shrink-0 mt-0.5" />
+                  <MapPin className="w-5 h-5 text-accent shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-semibold text-white">
+                    <p className="text-sm font-semibold text-ink">
                       Accra, Ghana
                     </p>
                     <p className="text-xs text-ink-muted mt-0.5">
-                      Owned by Sablaizer · Serving Ghana &amp; global clients
+                      Led by Evans Kwaku Sablah (Sablaizer) · Local &amp; International Clients
                     </p>
                   </div>
                 </div>
 
-                {hasValidWhatsApp && (
-                  <div className="pt-2">
-                    <a
-                      href={buildWhatsAppUrl(
-                        whatsappNumber,
-                        `Hello AizerTech GH, I would like to discuss a ${selectedService} project.`
-                      )}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="tap-feedback inline-flex items-center justify-center gap-2.5 px-5 py-3 rounded-xl bg-surface border border-hairline-strong text-sm font-semibold text-white hover:border-neon/60 hover:text-neon"
-                    >
-                      <MessageCircle className="w-4 h-4 text-neon" />
-                      <span>Chat on WhatsApp ({whatsappNumber})</span>
-                    </a>
-                  </div>
-                )}
-
-                {pendingOfflineCount > 0 && (
-                  <p className="text-xs text-amber-300 flex items-center gap-2 pt-2">
-                    <WifiOff className="w-4 h-4 shrink-0" />
-                    <span>
-                      {pendingOfflineCount} offline message(s) waiting to sync
-                      when online.
-                    </span>
-                  </p>
-                )}
+                <div className="pt-2">
+                  <a
+                    href={buildWhatsAppUrl(
+                      `Hello Aizer Tech, I would like a quote for ${selectedService} (${selectedBudget}).`
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="haptic-tap ios-glass-subtle inline-flex items-center justify-center gap-2.5 px-5 py-3 rounded-xl text-sm font-medium text-ink hover:border-[#25D366]/60"
+                  >
+                    <MessageCircle className="w-4 h-4 text-[#25D366] shrink-0" />
+                    <span>WhatsApp {WHATSAPP_DISPLAY}</span>
+                  </a>
+                </div>
               </div>
             </Reveal>
           </div>
 
-          <div className="lg:col-span-7">
+          <div className="lg:col-span-7 min-w-0">
             <Reveal delay={0.05}>
               <form
                 onSubmit={handleSubmit}
                 noValidate
-                className="rounded-2xl bg-surface border border-hairline p-6 sm:p-8 space-y-5"
+                className="ios-glass rounded-[24px] p-5 sm:p-8 space-y-5"
               >
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -283,17 +187,17 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                       htmlFor="contact-name"
                       className="block text-xs font-medium text-ink-secondary mb-1.5"
                     >
-                      Full Name
+                      Your Name
                     </label>
                     <input
                       id="contact-name"
                       type="text"
                       required
                       maxLength={VALIDATION_LIMITS.MAX_NAME_LEN}
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
+                      value={senderName}
+                      onChange={(e) => setSenderName(e.target.value)}
                       placeholder="Kwame Mensah"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-field border border-hairline-strong text-sm text-white placeholder:text-ink-subtle focus:outline-none focus:border-neon"
+                      className="w-full px-4 py-3 rounded-xl bg-field border border-hairline-strong text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-accent"
                     />
                   </div>
 
@@ -302,17 +206,17 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                       htmlFor="contact-email"
                       className="block text-xs font-medium text-ink-secondary mb-1.5"
                     >
-                      Email
+                      Email Address
                     </label>
                     <input
                       id="contact-email"
                       type="email"
                       required
                       maxLength={VALIDATION_LIMITS.MAX_EMAIL_LEN}
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      value={senderEmail}
+                      onChange={(e) => setSenderEmail(e.target.value)}
                       placeholder="kwame@company.com"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-field border border-hairline-strong text-sm text-white placeholder:text-ink-subtle focus:outline-none focus:border-neon"
+                      className="w-full px-4 py-3 rounded-xl bg-field border border-hairline-strong text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-accent"
                     />
                   </div>
                 </div>
@@ -323,17 +227,16 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                       htmlFor="contact-phone"
                       className="block text-xs font-medium text-ink-secondary mb-1.5"
                     >
-                      Phone / WhatsApp
+                      WhatsApp / Phone (Optional)
                     </label>
                     <input
                       id="contact-phone"
                       type="tel"
-                      required
                       maxLength={VALIDATION_LIMITS.MAX_PHONE_LEN}
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
+                      value={senderPhone}
+                      onChange={(e) => setSenderPhone(e.target.value)}
                       placeholder="+233 24 000 0000"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-field border border-hairline-strong text-sm text-white placeholder:text-ink-subtle focus:outline-none focus:border-neon"
+                      className="w-full px-4 py-3 rounded-xl bg-field border border-hairline-strong text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-accent"
                     />
                   </div>
 
@@ -342,17 +245,17 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                       htmlFor="contact-service"
                       className="block text-xs font-medium text-ink-secondary mb-1.5"
                     >
-                      Service Needed
+                      Service Tier
                     </label>
                     <select
                       id="contact-service"
                       value={selectedService}
                       onChange={(e) =>
-                        onChangeService(e.target.value as ServiceOption)
+                        onChangeService(e.target.value as ServiceType)
                       }
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-field border border-hairline-strong text-sm text-white focus:outline-none focus:border-neon"
+                      className="w-full px-3.5 py-3 rounded-xl bg-field border border-hairline-strong text-sm text-ink focus:outline-none focus:border-accent"
                     >
-                      {CONTACT_SERVICE_OPTIONS.map((option) => (
+                      {SERVICE_OPTIONS.map((option) => (
                         <option key={option} value={option}>
                           {option}
                         </option>
@@ -365,15 +268,15 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                       htmlFor="contact-budget"
                       className="block text-xs font-medium text-ink-secondary mb-1.5"
                     >
-                      Budget
+                      Estimated Budget
                     </label>
                     <select
                       id="contact-budget"
                       value={selectedBudget}
                       onChange={(e) =>
-                        onChangeBudget(e.target.value as BudgetOption)
+                        onChangeBudget(e.target.value as BudgetTier)
                       }
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-field border border-hairline-strong text-sm text-white focus:outline-none focus:border-neon"
+                      className="w-full px-3.5 py-3 rounded-xl bg-field border border-hairline-strong text-sm text-ink focus:outline-none focus:border-accent"
                     >
                       {BUDGET_OPTIONS.map((option) => (
                         <option key={option} value={option}>
@@ -389,7 +292,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                     htmlFor="contact-message"
                     className="block text-xs font-medium text-ink-secondary mb-1.5"
                   >
-                    Message
+                    Project Details
                   </label>
                   <textarea
                     id="contact-message"
@@ -398,37 +301,27 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                     maxLength={VALIDATION_LIMITS.MAX_MESSAGE_LEN}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
-                    placeholder="Tell us about your app, website, e-commerce store, or brand goals and timeline..."
-                    className="w-full px-3.5 py-3 rounded-xl bg-field border border-hairline-strong text-sm text-white placeholder:text-ink-subtle focus:outline-none focus:border-neon resize-y"
+                    placeholder="Share what you want to build (business website, mobile app, food ordering platform), key features, and your timeline..."
+                    className="w-full px-4 py-3 rounded-xl bg-field border border-hairline-strong text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-accent resize-y"
                   />
                 </div>
 
                 {submitState.type === 'success' && (
                   <div
                     role="status"
-                    className="rounded-xl bg-neon/10 border border-neon/40 p-4 flex items-start gap-3 text-sm text-white"
+                    className="rounded-xl bg-emerald-500/10 border border-emerald-500/35 p-4 flex items-start gap-3 text-sm text-emerald-600 dark:text-emerald-200"
                   >
-                    <CheckCircle2 className="w-5 h-5 text-neon shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
                     <p className="font-medium">{submitState.text}</p>
-                  </div>
-                )}
-
-                {submitState.type === 'offline-queued' && (
-                  <div
-                    role="status"
-                    className="rounded-xl bg-amber-500/10 border border-amber-400/40 p-4 flex items-start gap-3 text-sm text-amber-200"
-                  >
-                    <WifiOff className="w-5 h-5 text-amber-300 shrink-0 mt-0.5" />
-                    <p>{submitState.text}</p>
                   </div>
                 )}
 
                 {submitState.type === 'error' && (
                   <div
                     role="alert"
-                    className="rounded-xl bg-red-500/10 border border-red-400/40 p-4 flex items-start gap-3 text-sm text-red-200"
+                    className="rounded-xl bg-red-500/10 border border-red-500/35 p-4 flex items-start gap-3 text-sm text-red-600 dark:text-red-200"
                   >
-                    <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                    <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
                     <p>{submitState.text}</p>
                   </div>
                 )}
@@ -436,17 +329,17 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="tap-feedback w-full py-3.5 px-6 rounded-xl bg-neon text-neon-ink text-sm font-semibold hover:bg-neon-hover disabled:opacity-60 inline-flex items-center justify-center gap-2 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neon"
+                  className="haptic-tap w-full py-3.5 px-6 rounded-xl bg-accent-btn text-accent-ink text-sm font-semibold hover:bg-accent-hover disabled:opacity-60 inline-flex items-center justify-center gap-2 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 >
                   {submitting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Sending Message...</span>
+                      <span>Sending Project Brief...</span>
                     </>
                   ) : (
                     <>
                       <Send className="w-4 h-4" />
-                      <span>Send Message</span>
+                      <span>Send Project Brief</span>
                     </>
                   )}
                 </button>
