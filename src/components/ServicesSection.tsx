@@ -101,7 +101,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({
     if (service.number === '02.' || service.number === '03.') {
       return settings.mobileStartingPrice;
     }
-    return service.startingPrice;
+    return settings.brandingStartingPrice || service.startingPrice;
   };
 
   return (
@@ -200,7 +200,8 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({
 
                     <a
                       href={buildWhatsAppUrl(
-                        `Hello Aizer Tech, I am interested in ${service.title} (${displayPrice}).`
+                        `Hello Aizer Tech, I am interested in ${service.title} (${displayPrice}).`,
+                        settings.whatsappNumber
                       )}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -233,7 +234,8 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({
 
             <a
               href={buildWhatsAppUrl(
-                'Hello Aizer Tech, I am ready to pay the 50% deposit via MoMo to start my project. Please share your Mobile Money details.'
+                'Hello Aizer Tech, I am ready to pay the 50% deposit via MoMo to start my project. Please share your Mobile Money details.',
+                settings.whatsappNumber
               )}
               target="_blank"
               rel="noopener noreferrer"

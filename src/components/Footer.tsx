@@ -2,18 +2,27 @@ import React from 'react';
 import { MessageCircle } from 'lucide-react';
 import {
   buildWhatsAppUrl,
+  formatWhatsAppDisplay,
+  StudioSettings,
   THEME_OPTIONS,
   ThemeMode,
-  WHATSAPP_DISPLAY,
 } from '../types';
 import { BrandMark } from './BrandMark';
 
 interface FooterProps {
   theme: ThemeMode;
+  settings: StudioSettings;
   onChangeTheme: (theme: ThemeMode) => void;
 }
 
-export const Footer: React.FC<FooterProps> = ({ theme, onChangeTheme }) => {
+export const Footer: React.FC<FooterProps> = ({
+  theme,
+  settings,
+  onChangeTheme,
+}) => {
+  const cleanWebRate = settings.websiteStartingPrice.replace(/^From\s+/i, '');
+  const cleanMobileRate = settings.mobileStartingPrice.replace(/^From\s+/i, '');
+
   return (
     <footer className="border-t border-hairline bg-surface py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 flex flex-col lg:flex-row lg:items-center justify-between gap-8">
@@ -25,7 +34,7 @@ export const Footer: React.FC<FooterProps> = ({ theme, onChangeTheme }) => {
             </span>
           </div>
           <p className="mt-2 text-sm text-ink-muted">
-            Websites from GHS 800 · Mobile &amp; Food Apps from GHS 2,500 · Sablaizer · Accra, Ghana
+            Websites from {cleanWebRate} · Mobile &amp; Food Apps from {cleanMobileRate} · Sablaizer · Accra, Ghana
           </p>
         </div>
 
@@ -44,21 +53,28 @@ export const Footer: React.FC<FooterProps> = ({ theme, onChangeTheme }) => {
           </a>
           <a
             href={buildWhatsAppUrl(
-              'Hello Aizer Tech, I would like to discuss a website or mobile app.'
+              'Hello Aizer Tech, I would like to discuss a website or mobile app.',
+              settings.whatsappNumber
             )}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-[#25D366] hover:opacity-85 font-medium"
           >
             <MessageCircle className="w-4 h-4" />
-            <span>WhatsApp {WHATSAPP_DISPLAY}</span>
+            <span>WhatsApp {formatWhatsAppDisplay(settings.whatsappNumber)}</span>
           </a>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 mt-8 pt-6 border-t border-hairline flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs text-ink-subtle">
         <p>
-          © {new Date().getFullYear()} Aizer Tech · Founded by Evans Kwaku Sablah (Sablaizer) in Accra, Ghana.
+          © {new Date().getFullYear()} Aizer Tech · Founded by Evans Kwaku Sablah (Sablaizer) in Accra, Ghana ·{' '}
+          <a
+            href={`mailto:${settings.contactEmail}`}
+            className="hover:text-ink transition-colors"
+          >
+            {settings.contactEmail}
+          </a>
         </p>
 
         <div className="flex flex-wrap items-center gap-2">

@@ -88,7 +88,8 @@ export const FounderSection: React.FC<FounderSectionProps> = ({ settings }) => {
               <div className="flex flex-col sm:flex-row sm:items-center gap-3.5 sm:gap-4">
                 <a
                   href={buildWhatsAppUrl(
-                    'Hello Sablaizer, I would like to speak with you directly about a project with Aizer Tech.'
+                    'Hello Sablaizer, I would like to speak with you directly about a project with Aizer Tech.',
+                    settings.whatsappNumber
                   )}
                   target="_blank"
                   rel="noopener noreferrer"

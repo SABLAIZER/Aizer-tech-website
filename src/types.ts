@@ -10,17 +10,35 @@ export type BudgetTier =
   | 'GHS 2,500 - 5,000'
   | 'GHS 5,000+';
 
-export type MessageStatus = 'new' | 'reviewed' | 'replied' | 'archived';
+export type MessageStatus = 'new' | 'reviewed' | 'replied' | 'done' | 'archived';
+
+export type MessageCollection = 'aizertech_messages' | 'contactMessages';
 
 export interface ContactMessageRecord {
   id: string;
+  sourceCollection: MessageCollection;
   senderName: string;
   senderEmail: string;
   senderPhone: string;
-  serviceType: ServiceType;
-  budgetTier: BudgetTier;
+  serviceType: string;
+  budgetTier: string;
   message: string;
   status: MessageStatus;
+  createdAt?: { seconds: number; nanoseconds: number } | null;
+  updatedAt?: { seconds: number; nanoseconds: number } | null;
+}
+
+export type StudioProjectStatus = 'in_progress' | 'done';
+
+export interface StudioProjectRecord {
+  id: string;
+  title: string;
+  clientName: string;
+  clientPhone: string;
+  serviceType: string;
+  amountGhs: number;
+  status: StudioProjectStatus;
+  notes: string;
   createdAt?: { seconds: number; nanoseconds: number } | null;
   updatedAt?: { seconds: number; nanoseconds: number } | null;
 }
@@ -61,12 +79,42 @@ export const FOUNDER_PORTRAIT_URL = '/assets/aistudio/IMG_1725_008ca0a8.jpeg';
 export const WHATSAPP_NUMBER = '233276335736';
 export const WHATSAPP_DISPLAY = '+233 27 633 5736';
 export const ADMIN_EMAIL = 'sablahevans0@gmail.com';
+export const ALLOWED_ADMIN_EMAILS = [
+  'sablahevans0@gmail.com',
+  'sablaizer@gmail.com',
+] as const;
 
-export function buildWhatsAppUrl(customMessage?: string): string {
+export function isAllowedAdminEmail(email?: string | null): boolean {
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  return (ALLOWED_ADMIN_EMAILS as readonly string[]).includes(normalized);
+}
+
+export function normalizeWhatsAppDigits(raw?: string): string {
+  const digits = (raw || WHATSAPP_NUMBER).replace(/\D/g, '');
+  if (digits.startsWith('0') && digits.length === 10) {
+    return `233${digits.slice(1)}`;
+  }
+  return digits || WHATSAPP_NUMBER;
+}
+
+export function formatWhatsAppDisplay(raw?: string): string {
+  const digits = normalizeWhatsAppDigits(raw);
+  if (digits.startsWith('233') && digits.length === 12) {
+    return `+233 ${digits.slice(3, 5)} ${digits.slice(5, 8)} ${digits.slice(8)}`;
+  }
+  return digits ? `+${digits}` : WHATSAPP_DISPLAY;
+}
+
+export function buildWhatsAppUrl(
+  customMessage?: string,
+  phoneOverride?: string
+): string {
   const defaultMsg =
     'Hello Aizer Tech, I would like to discuss a website or mobile app project.';
   const text = encodeURIComponent(customMessage || defaultMsg);
-  return `https://wa.me/${WHATSAPP_NUMBER}?text=${text}`;
+  const digits = normalizeWhatsAppDigits(phoneOverride);
+  return `https://wa.me/${digits}?text=${text}`;
 }
 
 export const SERVICE_OPTIONS: ServiceType[] = [
@@ -89,6 +137,9 @@ export interface StudioSettings {
   announcementBanner: string;
   websiteStartingPrice: string;
   mobileStartingPrice: string;
+  brandingStartingPrice: string;
+  whatsappNumber: string;
+  contactEmail: string;
   founderBio: string;
   updatedAt?: { seconds: number; nanoseconds: number } | null;
 }
@@ -100,6 +151,9 @@ export const DEFAULT_STUDIO_SETTINGS: StudioSettings = {
   announcementBanner: '',
   websiteStartingPrice: 'From GHS 800',
   mobileStartingPrice: 'From GHS 2,500',
+  brandingStartingPrice: 'Project Based',
+  whatsappNumber: WHATSAPP_NUMBER,
+  contactEmail: ADMIN_EMAIL,
   founderBio:
     'Aizer Tech was built in Accra on a straightforward principle: local businesses and emerging brands deserve international-grade websites and mobile software without inflated agency retainers.',
 };
@@ -112,6 +166,10 @@ export const STUDIO_SETTINGS_LIMITS = {
   MAX_ANNOUNCEMENT: 160,
   MIN_PRICE_LABEL: 2,
   MAX_PRICE_LABEL: 40,
+  MIN_PHONE_LEN: 7,
+  MAX_PHONE_LEN: 20,
+  MIN_EMAIL_LEN: 5,
+  MAX_EMAIL_LEN: 150,
   MIN_FOUNDER_BIO: 20,
   MAX_FOUNDER_BIO: 600,
 } as const;

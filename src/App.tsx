@@ -111,6 +111,20 @@ export default function App() {
             data.mobileStartingPrice.trim()
               ? data.mobileStartingPrice
               : DEFAULT_STUDIO_SETTINGS.mobileStartingPrice,
+          brandingStartingPrice:
+            typeof data.brandingStartingPrice === 'string' &&
+            data.brandingStartingPrice.trim()
+              ? data.brandingStartingPrice
+              : DEFAULT_STUDIO_SETTINGS.brandingStartingPrice,
+          whatsappNumber:
+            typeof data.whatsappNumber === 'string' &&
+            data.whatsappNumber.trim()
+              ? data.whatsappNumber
+              : DEFAULT_STUDIO_SETTINGS.whatsappNumber,
+          contactEmail:
+            typeof data.contactEmail === 'string' && data.contactEmail.trim()
+              ? data.contactEmail
+              : DEFAULT_STUDIO_SETTINGS.contactEmail,
           founderBio:
             typeof data.founderBio === 'string' && data.founderBio.trim()
               ? data.founderBio
@@ -184,7 +198,10 @@ export default function App() {
           />
         ) : (
           <div className="min-h-screen bg-canvas text-ink transition-colors duration-200">
-            <Navbar onNavigateContact={() => scrollToSection('contact')} />
+            <Navbar
+              whatsappNumber={studioSettings.whatsappNumber}
+              onNavigateContact={() => scrollToSection('contact')}
+            />
 
             <main>
               <Hero
@@ -207,6 +224,7 @@ export default function App() {
               <ClientSuccessSection />
 
               <ContactSection
+                settings={studioSettings}
                 selectedService={selectedService}
                 selectedBudget={selectedBudget}
                 onChangeService={setSelectedService}
@@ -214,12 +232,17 @@ export default function App() {
               />
             </main>
 
-            <Footer theme={theme} onChangeTheme={setTheme} />
+            <Footer
+              theme={theme}
+              settings={studioSettings}
+              onChangeTheme={setTheme}
+            />
 
             {/* Compact Floating iOS Glass WhatsApp Quick Action (<= 48px height to respect mobile sticky budget) */}
             <a
               href={buildWhatsAppUrl(
-                'Hello Aizer Tech, I saw your portfolio and would like to start a project.'
+                'Hello Aizer Tech, I saw your portfolio and would like to start a project.',
+                studioSettings.whatsappNumber
               )}
               target="_blank"
               rel="noopener noreferrer"

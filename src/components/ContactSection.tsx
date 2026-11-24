@@ -13,14 +13,16 @@ import {
   BUDGET_OPTIONS,
   BudgetTier,
   buildWhatsAppUrl,
+  formatWhatsAppDisplay,
   SERVICE_OPTIONS,
   ServiceType,
+  StudioSettings,
   VALIDATION_LIMITS,
-  WHATSAPP_DISPLAY,
 } from '../types';
 import { Reveal } from './Reveal';
 
 interface ContactSectionProps {
+  settings: StudioSettings;
   selectedService: ServiceType;
   selectedBudget: BudgetTier;
   onChangeService: (service: ServiceType) => void;
@@ -28,6 +30,7 @@ interface ContactSectionProps {
 }
 
 export const ContactSection: React.FC<ContactSectionProps> = ({
+  settings,
   selectedService,
   selectedBudget,
   onChangeService,
@@ -94,12 +97,12 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
 
     setSubmitting(true);
     try {
-      await addDoc(collection(db, 'contactMessages'), {
-        senderName: boundedName,
-        senderEmail: boundedEmail,
-        senderPhone: boundedPhone,
-        serviceType: selectedService,
-        budgetTier: selectedBudget,
+      await addDoc(collection(db, 'aizertech_messages'), {
+        name: boundedName,
+        email: boundedEmail,
+        phone: boundedPhone,
+        service: selectedService,
+        budget: selectedBudget,
         message: boundedMessage,
         status: 'new',
         createdAt: serverTimestamp(),
@@ -157,17 +160,24 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                   </div>
                 </div>
 
-                <div className="pt-2">
+                <div className="pt-2 flex flex-wrap items-center gap-3">
                   <a
                     href={buildWhatsAppUrl(
-                      `Hello Aizer Tech, I would like a quote for ${selectedService} (${selectedBudget}).`
+                      `Hello Aizer Tech, I would like a quote for ${selectedService} (${selectedBudget}).`,
+                      settings.whatsappNumber
                     )}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="haptic-tap ios-glass-subtle inline-flex items-center justify-center gap-2.5 px-5 py-3 rounded-xl text-sm font-medium text-ink hover:border-[#25D366]/60"
                   >
                     <MessageCircle className="w-4 h-4 text-[#25D366] shrink-0" />
-                    <span>WhatsApp {WHATSAPP_DISPLAY}</span>
+                    <span>WhatsApp {formatWhatsAppDisplay(settings.whatsappNumber)}</span>
+                  </a>
+                  <a
+                    href={`mailto:${settings.contactEmail}`}
+                    className="text-xs font-mono-tabular text-ink-muted hover:text-accent transition-colors"
+                  >
+                    {settings.contactEmail}
                   </a>
                 </div>
               </div>

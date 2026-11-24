@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Menu, MessageCircle, X } from 'lucide-react';
-import { buildWhatsAppUrl, WHATSAPP_DISPLAY } from '../types';
+import { buildWhatsAppUrl, formatWhatsAppDisplay, WHATSAPP_NUMBER } from '../types';
 import { BrandMark } from './BrandMark';
 
 interface NavbarProps {
+  whatsappNumber?: string;
   onNavigateContact: () => void;
 }
 
@@ -15,7 +16,10 @@ const NAV_LINKS = [
   { label: 'Contact', href: '#contact' },
 ];
 
-export const Navbar: React.FC<NavbarProps> = ({ onNavigateContact }) => {
+export const Navbar: React.FC<NavbarProps> = ({
+  whatsappNumber = WHATSAPP_NUMBER,
+  onNavigateContact,
+}) => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -127,7 +131,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onNavigateContact }) => {
             </button>
             <a
               href={buildWhatsAppUrl(
-                'Hello Aizer Tech, I would like to discuss a website or mobile app project.'
+                'Hello Aizer Tech, I would like to discuss a website or mobile app project.',
+                whatsappNumber
               )}
               target="_blank"
               rel="noopener noreferrer"
@@ -135,7 +140,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onNavigateContact }) => {
               className="haptic-tap ios-glass-subtle w-full py-3.5 px-4 rounded-xl text-sm font-medium text-ink inline-flex items-center justify-center gap-2"
             >
               <MessageCircle className="w-4 h-4 text-[#25D366]" />
-              <span>WhatsApp {WHATSAPP_DISPLAY}</span>
+              <span>WhatsApp {formatWhatsAppDisplay(whatsappNumber)}</span>
             </a>
           </div>
         </div>

@@ -1,14 +1,23 @@
 import { initializeApp } from 'firebase/app';
 import {
+  browserLocalPersistence,
+  browserSessionPersistence,
+  EmailAuthProvider,
   getAuth,
   GoogleAuthProvider,
   onAuthStateChanged,
+  reauthenticateWithCredential,
+  sendEmailVerification,
+  setPersistence,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
+  updatePassword,
   User,
 } from 'firebase/auth';
 import { doc, getDocFromServer, getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
+import { ADMIN_EMAIL } from './types';
 
 export const WORKSPACE_SCOPES = [
   'https://www.googleapis.com/auth/gmail.send',
@@ -46,17 +55,52 @@ export function clearGmailAccessToken(): void {
   cachedGmailAccessToken = null;
 }
 
-export async function googleSignInBasic(): Promise<User> {
+export function resolveAdminEmailInput(usernameOrEmail: string): string {
+  const trimmed = usernameOrEmail.trim().toLowerCase();
+  if (!trimmed) return ADMIN_EMAIL;
+  if (trimmed.includes('@')) return trimmed;
+  if (trimmed === 'sablaizer' || trimmed === 'aizertech') {
+    return 'sablaizer@gmail.com';
+  }
+  if (trimmed === 'sablahevans0' || trimmed === 'evans' || trimmed === 'ceo') {
+    return ADMIN_EMAIL;
+  }
+  return `${trimmed}@gmail.com`;
+}
+
+export async function emailPasswordSignIn(
+  usernameOrEmail: string,
+  password: string,
+  stayLoggedIn: boolean
+): Promise<User> {
+  const resolvedEmail = resolveAdminEmailInput(usernameOrEmail);
+  await setPersistence(
+    auth,
+    stayLoggedIn ? browserLocalPersistence : browserSessionPersistence
+  );
+  const result = await signInWithEmailAndPassword(auth, resolvedEmail, password);
+  return result.user;
+}
+
+export async function googleSignInBasic(stayLoggedIn = true): Promise<User> {
+  await setPersistence(
+    auth,
+    stayLoggedIn ? browserLocalPersistence : browserSessionPersistence
+  );
   const result = await signInWithPopup(auth, basicGoogleProvider);
   return result.user;
 }
 
-export async function googleSignInWithGmail(): Promise<{
+export async function googleSignInWithGmail(stayLoggedIn = true): Promise<{
   user: User;
   accessToken: string | null;
 }> {
   try {
     isSigningIn = true;
+    await setPersistence(
+      auth,
+      stayLoggedIn ? browserLocalPersistence : browserSessionPersistence
+    );
     const result = await signInWithPopup(auth, googleProvider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     cachedGmailAccessToken = credential?.accessToken ?? null;
@@ -64,6 +108,44 @@ export async function googleSignInWithGmail(): Promise<{
   } finally {
     isSigningIn = false;
   }
+}
+
+export async function sendAdminVerificationEmail(): Promise<void> {
+  if (!auth.currentUser) {
+    throw new Error('No active session.');
+  }
+  await sendEmailVerification(auth.currentUser);
+}
+
+export async function reloadAdminUser(): Promise<User | null> {
+  if (!auth.currentUser) return null;
+  await auth.currentUser.reload();
+  await auth.currentUser.getIdToken(true);
+  return auth.currentUser;
+}
+
+export async function changeAdminPassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<void> {
+  const user = auth.currentUser;
+  if (!user || !user.email) {
+    throw new Error('Please sign in again before updating your password.');
+  }
+  if (newPassword.length < 8) {
+    throw new Error('New password must be at least 8 characters long.');
+  }
+
+  const hasPasswordProvider = user.providerData.some(
+    (p) => p.providerId === 'password'
+  );
+
+  if (hasPasswordProvider && currentPassword.trim()) {
+    const credential = EmailAuthProvider.credential(user.email, currentPassword);
+    await reauthenticateWithCredential(user, credential);
+  }
+
+  await updatePassword(user, newPassword);
 }
 
 export async function signOutAdmin(): Promise<void> {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { ArrowUpRight, MessageCircle, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
-import { buildWhatsAppUrl, StudioSettings, WHATSAPP_DISPLAY } from '../types';
+import { buildWhatsAppUrl, formatWhatsAppDisplay, StudioSettings } from '../types';
 import { BrandMark } from './BrandMark';
 
 interface HeroProps {
@@ -17,6 +17,7 @@ export const Hero: React.FC<HeroProps> = ({
 }) => {
   const cleanWebRate = settings.websiteStartingPrice.replace(/^From\s+/i, '');
   const cleanMobileRate = settings.mobileStartingPrice.replace(/^From\s+/i, '');
+  const whatsappDisplay = formatWhatsAppDisplay(settings.whatsappNumber);
   const announcement = settings.announcementBanner.trim();
 
   return (
@@ -70,14 +71,15 @@ export const Hero: React.FC<HeroProps> = ({
 
               <a
                 href={buildWhatsAppUrl(
-                  'Hello Aizer Tech, I would like to discuss building a website or mobile app.'
+                  'Hello Aizer Tech, I would like to discuss building a website or mobile app.',
+                  settings.whatsappNumber
                 )}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="haptic-tap ios-glass-subtle w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-5 sm:px-6 py-3.5 rounded-xl text-ink text-sm font-medium hover:border-[#25D366]/60 sm:whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#25D366]"
               >
                 <MessageCircle className="w-4 h-4 text-[#25D366] shrink-0" />
-                <span>WhatsApp {WHATSAPP_DISPLAY}</span>
+                <span>WhatsApp {whatsappDisplay}</span>
               </a>
 
               <button
@@ -201,7 +203,7 @@ export const Hero: React.FC<HeroProps> = ({
           </div>
           <div className="min-w-0">
             <p className="font-mono-tabular text-xl sm:text-2xl lg:text-3xl font-semibold text-accent leading-[1.2] break-words">
-              +233 27 633 5736
+              {whatsappDisplay}
             </p>
             <p className="text-sm text-ink-muted mt-1.5">
               Direct WhatsApp consultation

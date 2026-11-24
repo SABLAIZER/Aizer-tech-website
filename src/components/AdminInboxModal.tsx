@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import {
+  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -14,42 +15,58 @@ import {
 import {
   ArrowLeft,
   Check,
-  Copy,
-  Globe,
-  Inbox,
+  Crown,
+  FolderKanban,
+  LayoutDashboard,
   Link2,
+  Loader2,
   LogOut,
-  Mail,
-  MailOpen,
+  MailCheck,
   MessageCircle,
-  RotateCcw,
-  Save,
-  Send,
-  ShieldCheck,
-  Trash2,
+  MessageSquare,
+  RefreshCw,
+  Settings,
+  Users,
   X,
 } from 'lucide-react';
 import {
   auth,
+  changeAdminPassword,
   clearGmailAccessToken,
   db,
+  emailPasswordSignIn,
   getGmailAccessToken,
   GmailTokenExpiredError,
   googleSignInBasic,
   googleSignInWithGmail,
   handleFirestoreError,
   OperationType,
+  reloadAdminUser,
+  sendAdminVerificationEmail,
   sendGmailReply,
   signOutAdmin,
 } from '../firebase';
 import {
   ADMIN_EMAIL,
   ContactMessageRecord,
-  DEFAULT_STUDIO_SETTINGS,
+  isAllowedAdminEmail,
   MessageStatus,
-  STUDIO_SETTINGS_LIMITS,
+  StudioProjectRecord,
   StudioSettings,
 } from '../types';
+import { AdminClientsView } from './admin/AdminClientsView';
+import { AdminDashboardHome } from './admin/AdminDashboardHome';
+import { AdminLoginCard } from './admin/AdminLoginCard';
+import { AdminMessagesView } from './admin/AdminMessagesView';
+import { AdminProjectsView } from './admin/AdminProjectsView';
+import { AdminSettingsView } from './admin/AdminSettingsView';
+import {
+  buildClientWhatsAppHref,
+  deriveClientsFromMessages,
+  getInitial,
+  getTimestampMs,
+  normalizePhoneKey,
+} from './admin/adminUtils';
 
 interface AdminInboxModalProps {
   open: boolean;
@@ -58,57 +75,70 @@ interface AdminInboxModalProps {
   onClose: () => void;
 }
 
-type AdminTab = 'messages' | 'website';
+type AdminSection = 'dashboard' | 'messages' | 'clients' | 'projects' | 'settings';
 
-const STATUS_OPTIONS: MessageStatus[] = ['new', 'reviewed', 'replied', 'archived'];
-
-function formatTimestamp(ts?: { seconds: number; nanoseconds: number } | null): string {
-  if (!ts || typeof ts.seconds !== 'number') return 'Just now';
-  return new Date(ts.seconds * 1000).toLocaleString('en-GH', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
+function normalizeStatus(raw: unknown): MessageStatus {
+  const val = String(raw || 'new').toLowerCase();
+  if (
+    val === 'new' ||
+    val === 'reviewed' ||
+    val === 'replied' ||
+    val === 'done' ||
+    val === 'archived'
+  ) {
+    return val;
+  }
+  return 'new';
 }
 
 export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
   open,
-  fullPage = false,
   studioSettings,
   onClose,
 }) => {
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<AdminTab>('messages');
-
-  // Inbox state
-  const [messages, setMessages] = useState<ContactMessageRecord[]>([]);
-  const [loadingMessages, setLoadingMessages] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<'all' | MessageStatus>('all');
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
-  const [replySubject, setReplySubject] = useState('');
-  const [replyBody, setReplyBody] = useState('');
-  const [copiedField, setCopiedField] = useState<'email' | 'reply' | null>(null);
-  const [replyNotice, setReplyNotice] = useState<{
-    type: 'success' | 'error' | 'info';
-    text: string;
-  } | null>(null);
-  const [confirmSendItem, setConfirmSendItem] = useState<ContactMessageRecord | null>(
-    null
-  );
-  const [sendingEmail, setSendingEmail] = useState(false);
+  const [stayLoggedIn, setStayLoggedIn] = useState(true);
   const [hasGmailToken, setHasGmailToken] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [checkingVerify, setCheckingVerify] = useState(false);
+
+  const [activeSection, setActiveSection] = useState<AdminSection>('dashboard');
   const [copiedAdminLink, setCopiedAdminLink] = useState(false);
 
-  // Live website editor state
-  const [draftSettings, setDraftSettings] = useState<StudioSettings>(studioSettings);
-  const [editorDirty, setEditorDirty] = useState(false);
-  const [savingSettings, setSavingSettings] = useState(false);
-  const [editorNotice, setEditorNotice] = useState<{
-    type: 'success' | 'error' | 'info';
-    text: string;
-  } | null>(null);
+  // Dual real-time Firestore streams (aizertech_messages + contactMessages)
+  const [aizerMessages, setAizerMessages] = useState<ContactMessageRecord[]>([]);
+  const [legacyMessages, setLegacyMessages] = useState<ContactMessageRecord[]>([]);
+  const [loadingAizer, setLoadingAizer] = useState(false);
+  const [loadingLegacy, setLoadingLegacy] = useState(false);
+
+  // Real-time studioProjects stream
+  const [projects, setProjects] = useState<StudioProjectRecord[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+
+  // Cross-view controls & modals
+  const [messageSearchSeed, setMessageSearchSeed] = useState('');
+  const [selectedModalMessage, setSelectedModalMessage] =
+    useState<ContactMessageRecord | null>(null);
+  const [newProjectModalOpen, setNewProjectModalOpen] = useState(false);
+  const [broadcastModalOpen, setBroadcastModalOpen] = useState(false);
+
+  // New project form state
+  const [projTitle, setProjTitle] = useState('');
+  const [projClientName, setProjClientName] = useState('');
+  const [projClientPhone, setProjClientPhone] = useState('');
+  const [projService, setProjService] = useState('Business Website');
+  const [projAmount, setProjAmount] = useState('800');
+  const [projStatus, setProjStatus] = useState<'in_progress' | 'done'>('in_progress');
+  const [projNotes, setProjNotes] = useState('');
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [projError, setProjError] = useState<string | null>(null);
+
+  // Broadcast WhatsApp composer
+  const [broadcastText, setBroadcastText] = useState(
+    'Hello from Aizer Tech! We have open build slots this week for high-converting websites and mobile apps. Reply here if you would like to get started.'
+  );
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (firebaseUser) => {
@@ -119,1254 +149,1042 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
     return () => unsub();
   }, []);
 
-  useEffect(() => {
-    if (!editorDirty) {
-      setDraftSettings(studioSettings);
-    }
-  }, [studioSettings, editorDirty]);
+  const isAdminEmailMatch = Boolean(user && isAllowedAdminEmail(user.email));
+  const isAuthorizedAdmin = Boolean(
+    user && isAdminEmailMatch && user.emailVerified
+  );
 
-  useEffect(() => {
-    if (!open) {
-      setConfirmSendItem(null);
-      setReplyTargetId(null);
-      setReplyNotice(null);
-      setAuthError(null);
-      setEditorNotice(null);
-    }
-  }, [open]);
-
-  const isAuthorizedAdmin =
-    Boolean(user) &&
-    user?.email === ADMIN_EMAIL &&
-    Boolean(user?.emailVerified);
-
+  // Subscribe to both message collections & studioProjects
   useEffect(() => {
     if (!open || !authReady || !isAuthorizedAdmin) {
-      setMessages([]);
+      setAizerMessages([]);
+      setLegacyMessages([]);
+      setProjects([]);
       return;
     }
 
-    setLoadingMessages(true);
-    const messagesQuery = query(
+    setLoadingAizer(true);
+    setLoadingLegacy(true);
+    setLoadingProjects(true);
+
+    const aizerQuery = query(
+      collection(db, 'aizertech_messages'),
+      orderBy('createdAt', 'desc')
+    );
+    const unsubAizer = onSnapshot(
+      aizerQuery,
+      (snapshot) => {
+        const rows: ContactMessageRecord[] = snapshot.docs.map((docSnap) => {
+          const d = docSnap.data();
+          return {
+            id: docSnap.id,
+            sourceCollection: 'aizertech_messages',
+            senderName: String(d.name || d.senderName || 'Client'),
+            senderEmail: String(d.email || d.senderEmail || ''),
+            senderPhone: String(d.phone || d.senderPhone || ''),
+            serviceType: String(d.service || d.serviceType || 'Project Inquiry'),
+            budgetTier: String(d.budget || d.budgetTier || 'Custom'),
+            message: String(d.message || ''),
+            status: normalizeStatus(d.status),
+            createdAt: d.createdAt || null,
+            updatedAt: d.updatedAt || null,
+          };
+        });
+        setAizerMessages(rows);
+        setLoadingAizer(false);
+      },
+      (error) => {
+        setLoadingAizer(false);
+        handleFirestoreError(error, OperationType.LIST, 'aizertech_messages');
+      }
+    );
+
+    const legacyQuery = query(
       collection(db, 'contactMessages'),
       orderBy('createdAt', 'desc')
     );
-
-    const unsubscribe = onSnapshot(
-      messagesQuery,
+    const unsubLegacy = onSnapshot(
+      legacyQuery,
       (snapshot) => {
         const rows: ContactMessageRecord[] = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
+          const d = docSnap.data();
           return {
             id: docSnap.id,
-            senderName: String(data.senderName || ''),
-            senderEmail: String(data.senderEmail || ''),
-            senderPhone: String(data.senderPhone || ''),
-            serviceType: data.serviceType,
-            budgetTier: data.budgetTier,
-            message: String(data.message || ''),
-            status: (data.status as MessageStatus) || 'new',
-            createdAt: data.createdAt || null,
-            updatedAt: data.updatedAt || null,
+            sourceCollection: 'contactMessages',
+            senderName: String(d.senderName || d.name || 'Client'),
+            senderEmail: String(d.senderEmail || d.email || ''),
+            senderPhone: String(d.senderPhone || d.phone || ''),
+            serviceType: String(d.serviceType || d.service || 'Project Inquiry'),
+            budgetTier: String(d.budgetTier || d.budget || 'Custom'),
+            message: String(d.message || ''),
+            status: normalizeStatus(d.status),
+            createdAt: d.createdAt || null,
+            updatedAt: d.updatedAt || null,
           };
         });
-        setMessages(rows);
-        setLoadingMessages(false);
+        setLegacyMessages(rows);
+        setLoadingLegacy(false);
       },
       (error) => {
-        setLoadingMessages(false);
+        setLoadingLegacy(false);
         handleFirestoreError(error, OperationType.LIST, 'contactMessages');
       }
     );
 
-    return () => unsubscribe();
+    const projectsQuery = query(
+      collection(db, 'studioProjects'),
+      orderBy('createdAt', 'desc')
+    );
+    const unsubProjects = onSnapshot(
+      projectsQuery,
+      (snapshot) => {
+        const rows: StudioProjectRecord[] = snapshot.docs.map((docSnap) => {
+          const d = docSnap.data();
+          return {
+            id: docSnap.id,
+            title: String(d.title || 'Untitled Project'),
+            clientName: String(d.clientName || ''),
+            clientPhone: String(d.clientPhone || ''),
+            serviceType: String(d.serviceType || 'Website'),
+            amountGhs: Number(d.amountGhs) || 0,
+            status: d.status === 'done' ? 'done' : 'in_progress',
+            notes: String(d.notes || ''),
+            createdAt: d.createdAt || null,
+            updatedAt: d.updatedAt || null,
+          };
+        });
+        setProjects(rows);
+        setLoadingProjects(false);
+      },
+      (error) => {
+        setLoadingProjects(false);
+        handleFirestoreError(error, OperationType.LIST, 'studioProjects');
+      }
+    );
+
+    return () => {
+      unsubAizer();
+      unsubLegacy();
+      unsubProjects();
+    };
   }, [open, authReady, isAuthorizedAdmin]);
 
+  const allMessages = useMemo(() => {
+    return [...aizerMessages, ...legacyMessages].sort(
+      (a, b) => getTimestampMs(b.createdAt) - getTimestampMs(a.createdAt)
+    );
+  }, [aizerMessages, legacyMessages]);
+
   const unreadCount = useMemo(
-    () => messages.filter((msg) => msg.status === 'new').length,
-    [messages]
+    () => allMessages.filter((m) => m.status === 'new').length,
+    [allMessages]
   );
 
-  const filteredMessages = useMemo(() => {
-    if (statusFilter === 'all') return messages;
-    return messages.filter((msg) => msg.status === statusFilter);
-  }, [messages, statusFilter]);
+  const clientsWithPhones = useMemo(() => {
+    return deriveClientsFromMessages(allMessages).filter(
+      (c) => normalizePhoneKey(c.phone).length >= 7
+    );
+  }, [allMessages]);
 
   const formatAuthError = (error: unknown): string => {
-    const raw = error instanceof Error ? error.message : String(error || 'Sign-in cancelled.');
+    const raw =
+      error instanceof Error
+        ? error.message
+        : String(error || 'Authentication failed.');
     const code =
       typeof error === 'object' && error !== null && 'code' in error
         ? String((error as { code?: unknown }).code)
         : '';
 
-    if (code === 'auth/unauthorized-domain' || raw.includes('auth/unauthorized-domain')) {
-      const host = typeof window !== 'undefined' ? window.location.hostname : 'this domain';
-      return `This domain (${host}) is not whitelisted yet in Firebase. Open Firebase Console → project "aizerchat" → Authentication → Settings → Authorized domains → Add domain → enter "${host}".`;
+    if (
+      code === 'auth/unauthorized-domain' ||
+      raw.includes('auth/unauthorized-domain')
+    ) {
+      const host =
+        typeof window !== 'undefined' ? window.location.hostname : 'this domain';
+      return `Domain "${host}" is not authorized yet. Add it in Firebase Console → Authentication → Settings → Authorized domains.`;
+    }
+    if (
+      code === 'auth/operation-not-allowed' ||
+      raw.includes('auth/operation-not-allowed')
+    ) {
+      return 'Email/Password sign-in is not enabled yet in Firebase Console. Enable Email/Password under Authentication → Sign-in method, or use Continue with Google below.';
+    }
+    if (
+      code === 'auth/invalid-credential' ||
+      code === 'auth/wrong-password' ||
+      code === 'auth/user-not-found'
+    ) {
+      return 'Invalid admin username/email or password. Check your Firebase Auth credentials or sign in with Google below.';
     }
     if (code === 'auth/popup-blocked' || raw.includes('auth/popup-blocked')) {
-      return 'Pop-up was blocked by your browser. In iPhone Settings → Safari, turn off "Block Pop-ups" or tap Allow when Safari asks, then tap Sign in with Google again.';
+      return 'Pop-up was blocked by Safari/browser. Allow pop-ups for this site and tap Continue with Google again.';
     }
     return raw;
   };
 
-  const handleSignIn = async () => {
+  const handleEmailPasswordLogin = async (
+    usernameOrEmail: string,
+    password: string
+  ) => {
     setAuthError(null);
     try {
-      const result = await googleSignInWithGmail();
-      setUser(result.user);
-      setHasGmailToken(Boolean(result.accessToken));
+      const signed = await emailPasswordSignIn(
+        usernameOrEmail,
+        password,
+        stayLoggedIn
+      );
+      setUser(signed);
     } catch (error) {
       setAuthError(formatAuthError(error));
     }
   };
 
-  const handleBasicSignIn = async () => {
+  const handleGoogleLogin = async (withGmailScope: boolean) => {
     setAuthError(null);
     try {
-      const signedUser = await googleSignInBasic();
-      setUser(signedUser);
-      setHasGmailToken(false);
+      if (withGmailScope) {
+        const res = await googleSignInWithGmail(stayLoggedIn);
+        setUser(res.user);
+        setHasGmailToken(Boolean(res.accessToken));
+      } else {
+        const signed = await googleSignInBasic(stayLoggedIn);
+        setUser(signed);
+        setHasGmailToken(false);
+      }
     } catch (error) {
       setAuthError(formatAuthError(error));
-    }
-  };
-
-  const handleCopyAdminLink = async () => {
-    try {
-      const adminUrl = `${window.location.origin}/admin`;
-      await navigator.clipboard.writeText(adminUrl);
-      setCopiedAdminLink(true);
-      window.setTimeout(() => setCopiedAdminLink(false), 2400);
-    } catch {
-      setAuthError('Could not copy link automatically. Bookmark /admin after the website URL.');
     }
   };
 
   const handleSignOut = async () => {
-    setConfirmSendItem(null);
-    setReplyTargetId(null);
+    setSelectedModalMessage(null);
+    setNewProjectModalOpen(false);
+    setBroadcastModalOpen(false);
     setHasGmailToken(false);
     await signOutAdmin();
   };
 
-  const handleStatusChange = async (id: string, nextStatus: MessageStatus) => {
-    setUpdatingId(id);
-    const path = `contactMessages/${id}`;
+  const handleCopyAdminLink = async () => {
     try {
-      await updateDoc(doc(db, 'contactMessages', id), {
+      await navigator.clipboard.writeText(`${window.location.origin}/admin`);
+      setCopiedAdminLink(true);
+      window.setTimeout(() => setCopiedAdminLink(false), 2400);
+    } catch {
+      // Ignore
+    }
+  };
+
+  const handleUpdateMessageStatus = async (
+    msg: ContactMessageRecord,
+    nextStatus: MessageStatus
+  ) => {
+    const path = `${msg.sourceCollection}/${msg.id}`;
+    try {
+      await updateDoc(doc(db, msg.sourceCollection, msg.id), {
         status: nextStatus,
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
-    } finally {
-      setUpdatingId(null);
     }
   };
 
-  const handleToggleReadStatus = async (item: ContactMessageRecord) => {
-    const isUnread = item.status === 'new';
-    await handleStatusChange(item.id, isUnread ? 'reviewed' : 'new');
-  };
-
-  const handleDelete = async (id: string) => {
-    setUpdatingId(id);
-    const path = `contactMessages/${id}`;
+  const handleDeleteMessage = async (msg: ContactMessageRecord) => {
+    const path = `${msg.sourceCollection}/${msg.id}`;
     try {
-      await deleteDoc(doc(db, 'contactMessages', id));
-      if (replyTargetId === id) {
-        setReplyTargetId(null);
-      }
-      if (confirmSendItem?.id === id) {
-        setConfirmSendItem(null);
-      }
+      await deleteDoc(doc(db, msg.sourceCollection, msg.id));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, path);
-    } finally {
-      setUpdatingId(null);
     }
   };
 
-  const openEmailComposer = (item: ContactMessageRecord) => {
-    if (replyTargetId === item.id) {
-      setReplyTargetId(null);
-      setConfirmSendItem(null);
-      setReplyNotice(null);
-      return;
-    }
-    setReplyTargetId(item.id);
-    setConfirmSendItem(null);
-    setReplySubject(`Re: Your ${item.serviceType} inquiry — Aizer Tech`);
-    setReplyBody(
-      `Hi ${item.senderName},\n\nThank you for reaching out to Aizer Tech regarding your ${item.serviceType} (${item.budgetTier}). I wanted to follow up by email so we can get your project moving.\n\nPlease reply directly to this email with a convenient time to connect or any extra details you would like to share.\n\nBest regards,\nSablaizer (Evans Kwaku Sablah)\nFounder, Aizer Tech · Accra, Ghana\nWhatsApp / Call: +233 27 633 5736`
-    );
-    setCopiedField(null);
-    setReplyNotice(null);
-  };
+  const handleSendGmail = async (
+    msg: ContactMessageRecord,
+    subject: string,
+    body: string
+  ) => {
+    let token = getGmailAccessToken();
+    if (!token) {
+      const res = await googleSignInWithGmail(stayLoggedIn);
+      setUser(res.user);
+      token = res.accessToken;
+      setHasGmailToken(Boolean(token));
 
-  const markAsRepliedIfNeeded = async (item: ContactMessageRecord) => {
-    if (item.status !== 'replied') {
-      await handleStatusChange(item.id, 'replied');
+      if (!isAllowedAdminEmail(res.user.email) || !res.user.emailVerified) {
+        throw new Error(`Authorize with ${ADMIN_EMAIL} to send Gmail replies.`);
+      }
     }
-  };
 
-  const handleRequestSendEmail = (item: ContactMessageRecord) => {
-    if (!replySubject.trim()) {
-      setReplyNotice({
-        type: 'error',
-        text: 'Please enter a subject line before sending.',
-      });
-      return;
+    if (!token) {
+      throw new Error(
+        'Gmail send permission was not granted. Please authorize Gmail access on the Google popup.'
+      );
     }
-    if (!replyBody.trim()) {
-      setReplyNotice({
-        type: 'error',
-        text: 'Please enter a message before sending.',
-      });
-      return;
-    }
-    setReplyNotice(null);
-    setConfirmSendItem(item);
-  };
-
-  const handleConfirmAndSendEmail = async () => {
-    if (!confirmSendItem) return;
-    const item = confirmSendItem;
-    setSendingEmail(true);
-    setReplyNotice(null);
 
     try {
-      let token = getGmailAccessToken();
-      if (!token) {
-        const signInResult = await googleSignInWithGmail();
-        setUser(signInResult.user);
-        token = signInResult.accessToken;
-        setHasGmailToken(Boolean(token));
-
-        if (
-          signInResult.user.email !== ADMIN_EMAIL ||
-          !signInResult.user.emailVerified
-        ) {
-          throw new Error(
-            `Please authorize with the studio Gmail account (${ADMIN_EMAIL}) to send replies.`
-          );
-        }
-      }
-
-      if (!token) {
-        throw new Error(
-          'Gmail access permission was not received. Please click Confirm & Send Email and allow Gmail sending.'
-        );
-      }
-
-      try {
+      await sendGmailReply({
+        accessToken: token,
+        to: msg.senderEmail,
+        subject,
+        body,
+      });
+    } catch (err) {
+      if (err instanceof GmailTokenExpiredError) {
+        clearGmailAccessToken();
+        setHasGmailToken(false);
+        const refreshed = await googleSignInWithGmail(stayLoggedIn);
+        setUser(refreshed.user);
+        setHasGmailToken(Boolean(refreshed.accessToken));
+        if (!refreshed.accessToken) throw err;
         await sendGmailReply({
-          accessToken: token,
-          to: item.senderEmail,
-          subject: replySubject,
-          body: replyBody,
+          accessToken: refreshed.accessToken,
+          to: msg.senderEmail,
+          subject,
+          body,
         });
-      } catch (err) {
-        if (err instanceof GmailTokenExpiredError) {
-          clearGmailAccessToken();
-          setHasGmailToken(false);
-          const refreshed = await googleSignInWithGmail();
-          setUser(refreshed.user);
-          setHasGmailToken(Boolean(refreshed.accessToken));
-          if (
-            refreshed.user.email !== ADMIN_EMAIL ||
-            !refreshed.user.emailVerified
-          ) {
-            throw new Error(
-              `Please authorize with the studio Gmail account (${ADMIN_EMAIL}) to send replies.`
-            );
-          }
-          if (!refreshed.accessToken) {
-            throw err;
-          }
-          await sendGmailReply({
-            accessToken: refreshed.accessToken,
-            to: item.senderEmail,
-            subject: replySubject,
-            body: replyBody,
-          });
-        } else {
-          throw err;
-        }
+      } else {
+        throw err;
       }
+    }
 
-      await markAsRepliedIfNeeded(item);
-      setConfirmSendItem(null);
-      setReplyNotice({
-        type: 'success',
-        text: `Email sent to ${item.senderEmail} via Gmail and inquiry marked as replied.`,
-      });
-    } catch (error) {
-      const msg =
-        error instanceof Error
-          ? error.message
-          : 'Could not send email right now. Please try again.';
-      setConfirmSendItem(null);
-      setReplyNotice({ type: 'error', text: msg });
-    } finally {
-      setHasGmailToken(Boolean(getGmailAccessToken()));
-      setSendingEmail(false);
+    if (msg.status !== 'replied') {
+      await handleUpdateMessageStatus(msg, 'replied');
     }
   };
 
-  const handleCopyText = async (
-    text: string,
-    field: 'email' | 'reply',
-    item?: ContactMessageRecord
-  ) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedField(field);
-      if (field === 'reply' && item) {
-        await markAsRepliedIfNeeded(item);
-        setReplyNotice({
-          type: 'info',
-          text: 'Reply copied to clipboard and inquiry marked as replied.',
-        });
-      } else if (field === 'email') {
-        setReplyNotice({
-          type: 'info',
-          text: 'Client email address copied.',
-        });
-      }
-      window.setTimeout(() => {
-        setCopiedField((prev) => (prev === field ? null : prev));
-      }, 2400);
-    } catch {
-      setReplyNotice({
-        type: 'error',
-        text: 'Clipboard access blocked—please select and copy the text above.',
-      });
-    }
-  };
-
-  const handleDraftChange = <K extends keyof StudioSettings>(
-    key: K,
-    value: StudioSettings[K]
-  ) => {
-    setEditorDirty(true);
-    setEditorNotice(null);
-    setDraftSettings((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const handleResetDefaults = () => {
-    setEditorDirty(true);
-    setDraftSettings((prev) => ({
-      ...DEFAULT_STUDIO_SETTINGS,
-      updatedAt: prev.updatedAt,
-    }));
-    setEditorNotice({
-      type: 'info',
-      text: 'Default studio text loaded into the form. Tap "Save & Publish Changes" to push it live.',
-    });
-  };
-
-  const handleSaveStudioSettings = async (e: React.FormEvent) => {
+  const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    setEditorNotice(null);
+    setProjError(null);
 
-    const heroHeadline = draftSettings.heroHeadline.trim();
-    const heroSubheadline = draftSettings.heroSubheadline.trim();
-    const announcementBanner = draftSettings.announcementBanner.trim();
-    const websiteStartingPrice = draftSettings.websiteStartingPrice.trim();
-    const mobileStartingPrice = draftSettings.mobileStartingPrice.trim();
-    const founderBio = draftSettings.founderBio.trim();
+    const title = projTitle.trim();
+    const clientName = projClientName.trim();
+    const clientPhone = projClientPhone.trim();
+    const serviceType = projService.trim();
+    const amountGhs = Number(projAmount);
 
-    if (
-      heroHeadline.length < STUDIO_SETTINGS_LIMITS.MIN_HERO_HEADLINE ||
-      heroHeadline.length > STUDIO_SETTINGS_LIMITS.MAX_HERO_HEADLINE
-    ) {
-      setEditorNotice({
-        type: 'error',
-        text: `Hero headline must be between ${STUDIO_SETTINGS_LIMITS.MIN_HERO_HEADLINE} and ${STUDIO_SETTINGS_LIMITS.MAX_HERO_HEADLINE} characters.`,
-      });
+    if (title.length < 2) {
+      setProjError('Please enter a project title.');
+      return;
+    }
+    if (clientName.length < 2) {
+      setProjError('Please enter the client name.');
+      return;
+    }
+    if (!Number.isFinite(amountGhs) || amountGhs < 0) {
+      setProjError('Please enter a valid GHS price.');
       return;
     }
 
-    if (
-      heroSubheadline.length < STUDIO_SETTINGS_LIMITS.MIN_HERO_SUBHEADLINE ||
-      heroSubheadline.length > STUDIO_SETTINGS_LIMITS.MAX_HERO_SUBHEADLINE
-    ) {
-      setEditorNotice({
-        type: 'error',
-        text: `Hero subheadline must be between ${STUDIO_SETTINGS_LIMITS.MIN_HERO_SUBHEADLINE} and ${STUDIO_SETTINGS_LIMITS.MAX_HERO_SUBHEADLINE} characters.`,
-      });
-      return;
-    }
-
-    if (announcementBanner.length > STUDIO_SETTINGS_LIMITS.MAX_ANNOUNCEMENT) {
-      setEditorNotice({
-        type: 'error',
-        text: `Announcement banner must be ${STUDIO_SETTINGS_LIMITS.MAX_ANNOUNCEMENT} characters or fewer.`,
-      });
-      return;
-    }
-
-    if (
-      websiteStartingPrice.length < STUDIO_SETTINGS_LIMITS.MIN_PRICE_LABEL ||
-      websiteStartingPrice.length > STUDIO_SETTINGS_LIMITS.MAX_PRICE_LABEL ||
-      mobileStartingPrice.length < STUDIO_SETTINGS_LIMITS.MIN_PRICE_LABEL ||
-      mobileStartingPrice.length > STUDIO_SETTINGS_LIMITS.MAX_PRICE_LABEL
-    ) {
-      setEditorNotice({
-        type: 'error',
-        text: `Starting price labels must be between ${STUDIO_SETTINGS_LIMITS.MIN_PRICE_LABEL} and ${STUDIO_SETTINGS_LIMITS.MAX_PRICE_LABEL} characters.`,
-      });
-      return;
-    }
-
-    if (
-      founderBio.length < STUDIO_SETTINGS_LIMITS.MIN_FOUNDER_BIO ||
-      founderBio.length > STUDIO_SETTINGS_LIMITS.MAX_FOUNDER_BIO
-    ) {
-      setEditorNotice({
-        type: 'error',
-        text: `Founder bio must be between ${STUDIO_SETTINGS_LIMITS.MIN_FOUNDER_BIO} and ${STUDIO_SETTINGS_LIMITS.MAX_FOUNDER_BIO} characters.`,
-      });
-      return;
-    }
-
-    setSavingSettings(true);
+    setCreatingProject(true);
     try {
-      await setDoc(doc(db, 'studioSettings', 'public'), {
-        heroHeadline,
-        heroSubheadline,
-        announcementBanner,
-        websiteStartingPrice,
-        mobileStartingPrice,
-        founderBio,
+      await addDoc(collection(db, 'studioProjects'), {
+        title: title.slice(0, 120),
+        clientName: clientName.slice(0, 100),
+        clientPhone: clientPhone.slice(0, 30),
+        serviceType: serviceType.slice(0, 80),
+        amountGhs,
+        status: projStatus,
+        notes: projNotes.trim().slice(0, 1000),
+        createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-      setEditorDirty(false);
-      setEditorNotice({
-        type: 'success',
-        text: 'Live website changes saved and published. All visitors now see the updated text and pricing.',
+      setProjTitle('');
+      setProjClientName('');
+      setProjClientPhone('');
+      setProjAmount('800');
+      setProjStatus('in_progress');
+      setProjNotes('');
+      setNewProjectModalOpen(false);
+      setActiveSection('projects');
+    } catch (error) {
+      setProjError(
+        error instanceof Error ? error.message : 'Unable to save project.'
+      );
+    } finally {
+      setCreatingProject(false);
+    }
+  };
+
+  const handleToggleProjectStatus = async (project: StudioProjectRecord) => {
+    const nextStatus = project.status === 'done' ? 'in_progress' : 'done';
+    const path = `studioProjects/${project.id}`;
+    try {
+      await updateDoc(doc(db, 'studioProjects', project.id), {
+        title: project.title,
+        clientName: project.clientName,
+        clientPhone: project.clientPhone,
+        serviceType: project.serviceType,
+        amountGhs: project.amountGhs,
+        notes: project.notes,
+        status: nextStatus,
+        createdAt: project.createdAt,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  };
+
+  const handleDeleteProject = async (projectId: string) => {
+    const path = `studioProjects/${projectId}`;
+    try {
+      await deleteDoc(doc(db, 'studioProjects', projectId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
+  };
+
+  const handleSaveSettings = async (next: StudioSettings) => {
+    try {
+      await setDoc(doc(db, 'studioSettings', 'public'), {
+        heroHeadline: next.heroHeadline,
+        heroSubheadline: next.heroSubheadline,
+        announcementBanner: next.announcementBanner,
+        websiteStartingPrice: next.websiteStartingPrice,
+        mobileStartingPrice: next.mobileStartingPrice,
+        brandingStartingPrice: next.brandingStartingPrice,
+        whatsappNumber: next.whatsappNumber,
+        contactEmail: next.contactEmail,
+        founderBio: next.founderBio,
+        updatedAt: serverTimestamp(),
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'studioSettings/public');
-    } finally {
-      setSavingSettings(false);
     }
   };
 
   if (!open) return null;
 
-  const panelContent = (
-    <>
-      <div className="flex flex-wrap items-start justify-between gap-4 pb-5 border-b border-hairline">
-        <div>
-          <p className="text-xs text-accent font-medium mb-1">
-            Aizer Tech · Studio Owner Console
-          </p>
-          <h1
-            id="studio-inbox-title"
-            className="font-display text-2xl sm:text-3xl font-semibold text-ink leading-[1.2]"
-          >
-            {isAuthorizedAdmin && activeTab === 'website'
-              ? 'Live Website Editor'
-              : 'Saved Client Messages'}
+  if (!authReady) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0A] text-white font-admin flex flex-col items-center justify-center p-6">
+        <Crown className="w-8 h-8 text-[#FFD700] mb-3 animate-pulse" />
+        <p className="text-xs font-mono-tabular uppercase tracking-[0.2em] text-[#D4AF37]">
+          Initializing AizerTech Executive Suite...
+        </p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <AdminLoginCard
+        authError={authError}
+        stayLoggedIn={stayLoggedIn}
+        onToggleStayLoggedIn={setStayLoggedIn}
+        onEmailPasswordSignIn={handleEmailPasswordLogin}
+        onGoogleSignIn={handleGoogleLogin}
+        onBackToSite={onClose}
+      />
+    );
+  }
+
+  if (!isAdminEmailMatch) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0A] text-white font-admin flex items-center justify-center p-6">
+        <div className="luxury-card rounded-3xl p-8 max-w-md w-full text-center space-y-5">
+          <div className="w-12 h-12 rounded-2xl bg-red-500/15 border border-red-500/35 flex items-center justify-center text-red-400 mx-auto">
+            <Crown className="w-6 h-6" />
+          </div>
+          <h1 className="font-luxury text-2xl font-bold text-white">
+            CEO Access Only
           </h1>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={handleCopyAdminLink}
-            title="Copy direct /admin bookmark URL"
-            className="haptic-tap-sm inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface-elevated border border-hairline text-xs font-medium text-ink-secondary hover:text-accent hover:border-accent/50 cursor-pointer"
-          >
-            {copiedAdminLink ? (
-              <Check className="w-3.5 h-3.5 text-emerald-500" />
-            ) : (
-              <Link2 className="w-3.5 h-3.5" />
-            )}
-            <span className="hidden sm:inline">
-              {copiedAdminLink ? 'Admin Link Copied' : 'Copy Admin Link'}
-            </span>
-          </button>
-
-          {user && (
+          <p className="text-xs text-neutral-300 leading-relaxed">
+            Signed in as <span className="text-white font-semibold">{user.email}</span>. Only the authorized AizerTech GH CEO account ({ADMIN_EMAIL}) can unlock this portal.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
               type="button"
               onClick={handleSignOut}
-              className="haptic-tap-sm inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface-elevated border border-hairline text-xs font-medium text-ink-secondary hover:text-ink cursor-pointer"
+              className="gold-gradient-btn px-5 py-3 rounded-2xl text-xs font-bold cursor-pointer"
             >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Sign Out</span>
+              Switch Account
             </button>
-          )}
-
-          {fullPage ? (
             <button
               type="button"
               onClick={onClose}
-              className="haptic-tap-sm inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface-elevated border border-hairline text-xs font-medium text-ink-secondary hover:text-ink cursor-pointer"
+              className="px-5 py-3 rounded-2xl bg-white/[0.05] border border-white/12 text-xs font-semibold text-white cursor-pointer"
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>View Public Site</span>
+              Public Website
             </button>
-          ) : (
-            <button
-              type="button"
-              aria-label="Close studio inbox"
-              onClick={onClose}
-              className="haptic-tap-sm w-10 h-10 rounded-lg bg-surface-elevated border border-hairline flex items-center justify-center text-ink-muted hover:text-ink cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+          </div>
         </div>
       </div>
+    );
+  }
 
-      {isAuthorizedAdmin && (
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-5">
-          <div className="inline-flex flex-wrap items-center gap-1 p-1 rounded-xl bg-field border border-hairline">
+  if (!user.emailVerified) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0A] text-white font-admin flex items-center justify-center p-6">
+        <div className="luxury-card rounded-3xl p-8 max-w-md w-full text-center space-y-5">
+          <div className="w-12 h-12 rounded-2xl bg-[#D4AF37]/15 border border-[#D4AF37]/40 flex items-center justify-center text-[#FFD700] mx-auto">
+            <MailCheck className="w-6 h-6" />
+          </div>
+          <h1 className="font-luxury text-2xl font-bold text-white">
+            Verify Admin Email
+          </h1>
+          <p className="text-xs text-neutral-300 leading-relaxed">
+            For executive security, Firestore requires a verified email for{' '}
+            <span className="text-[#FFD700] font-semibold">{user.email}</span>. Send a verification link or tap Continue with Google to unlock instantly.
+          </p>
+          {verificationSent && (
+            <p className="text-xs text-emerald-300 bg-emerald-500/12 border border-emerald-500/35 rounded-2xl p-3">
+              Verification link sent to {user.email}. Click it in your inbox, then tap &ldquo;I&apos;ve Verified&rdquo;.
+            </p>
+          )}
+          <div className="space-y-2.5">
             <button
               type="button"
-              onClick={() => setActiveTab('messages')}
-              className={`haptic-tap-sm inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer ${
-                activeTab === 'messages'
-                  ? 'bg-accent-btn text-accent-ink'
-                  : 'text-ink-muted hover:text-ink'
-              }`}
+              onClick={async () => {
+                await sendAdminVerificationEmail();
+                setVerificationSent(true);
+              }}
+              className="gold-gradient-btn w-full py-3 rounded-2xl text-xs font-bold cursor-pointer"
             >
-              <Inbox className="w-3.5 h-3.5" />
-              <span>Client Messages ({messages.length})</span>
+              Send Verification Email
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('website')}
-              className={`haptic-tap-sm inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer ${
-                activeTab === 'website'
-                  ? 'bg-accent-btn text-accent-ink'
-                  : 'text-ink-muted hover:text-ink'
-              }`}
+              disabled={checkingVerify}
+              onClick={async () => {
+                setCheckingVerify(true);
+                const reloaded = await reloadAdminUser();
+                setUser(reloaded ? { ...reloaded } : null);
+                setCheckingVerify(false);
+              }}
+              className="w-full py-3 rounded-2xl bg-white/[0.06] border border-white/12 text-xs font-semibold text-white inline-flex items-center justify-center gap-2 cursor-pointer"
             >
-              <Globe className="w-3.5 h-3.5" />
-              <span>Edit Website (Live)</span>
+              <RefreshCw className={`w-3.5 h-3.5 ${checkingVerify ? 'animate-spin' : ''}`} />
+              <span>I&apos;ve Verified — Refresh</span>
             </button>
-          </div>
-
-          <p className="text-xs text-ink-subtle font-mono-tabular">
-            Signed in as {user?.email}
-          </p>
-        </div>
-      )}
-
-      <div className={fullPage ? 'pt-6' : 'flex-1 overflow-y-auto pt-6'}>
-        {!authReady ? (
-          <p className="text-sm text-ink-muted py-12 text-center">
-            Checking studio session...
-          </p>
-        ) : !user ? (
-          <div className="max-w-md mx-auto text-center py-12">
-            <div className="w-12 h-12 rounded-xl bg-accent/15 border border-accent/40 flex items-center justify-center text-accent mx-auto mb-4">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <h2 className="font-display text-xl font-semibold text-ink leading-[1.2] mb-2">
-              Studio Owner Sign-In Required
-            </h2>
-            <p className="text-sm text-ink-muted leading-relaxed mb-6">
-              Sign in with <span className="text-ink font-medium">{ADMIN_EMAIL}</span> to manage client inquiries and publish live updates to the public website.
-            </p>
-
-            {authError && (
-              <p
-                role="alert"
-                className="text-xs text-red-600 dark:text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 mb-4"
-              >
-                {authError}
-              </p>
-            )}
-
-            <div className="flex flex-col items-center gap-3">
-              <button
-                type="button"
-                onClick={handleSignIn}
-                className="haptic-tap inline-flex items-center justify-center gap-3 px-6 py-3 rounded-full bg-white text-[#1F1F1F] border border-[#747775]/40 text-sm font-medium shadow-sm hover:bg-[#F8F9FA] cursor-pointer"
-              >
-                <svg viewBox="0 0 48 48" className="w-5 h-5 shrink-0" aria-hidden="true">
-                  <path
-                    fill="#EA4335"
-                    d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
-                  />
-                  <path
-                    fill="#4285F4"
-                    d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
-                  />
-                </svg>
-                <span>Sign in with Google</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleBasicSignIn}
-                className="haptic-tap-sm text-xs text-ink-muted hover:text-accent underline underline-offset-4 cursor-pointer py-1"
-              >
-                Open Console Without Gmail Scope (Read, Edit Site &amp; WhatsApp)
-              </button>
-            </div>
-
-            <p className="text-[11px] text-ink-subtle leading-relaxed mt-5">
-              Tip: Open <span className="text-ink-secondary font-mono-tabular">/admin</span> on your phone and tap &ldquo;Add to Home Screen&rdquo; for one-tap access.
-            </p>
-          </div>
-        ) : !isAuthorizedAdmin ? (
-          <div className="max-w-md mx-auto text-center py-12">
-            <h2 className="font-display text-xl font-semibold text-ink leading-[1.2] mb-2">
-              Access Restricted
-            </h2>
-            <p className="text-sm text-ink-muted leading-relaxed mb-6">
-              Signed in as <span className="text-ink font-medium">{user.email}</span>. Only the studio owner account ({ADMIN_EMAIL}) can access this admin workspace.
-            </p>
+            <button
+              type="button"
+              onClick={() => handleGoogleLogin(true)}
+              className="w-full py-2.5 text-xs text-[#FFD700] hover:underline cursor-pointer"
+            >
+              Or Continue with Google (Instantly Verified)
+            </button>
             <button
               type="button"
               onClick={handleSignOut}
-              className="haptic-tap px-5 py-2.5 rounded-lg bg-surface-elevated border border-hairline text-sm font-medium text-ink cursor-pointer"
+              className="w-full py-2 text-xs text-neutral-400 hover:text-white cursor-pointer"
             >
-              Switch Google Account
+              Sign Out
             </button>
           </div>
-        ) : activeTab === 'website' ? (
-          <form onSubmit={handleSaveStudioSettings} className="space-y-6">
-            <div className="rounded-xl ios-glass-gold p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="text-xs sm:text-sm text-ink leading-relaxed">
-                <span className="font-semibold text-accent">Instant Live Sync:</span>{' '}
-                Changes saved here update the public website immediately for all visitors.
-                {studioSettings.updatedAt && (
-                  <span className="block text-xs text-ink-muted mt-1">
-                    Last published: {formatTimestamp(studioSettings.updatedAt)}
-                  </span>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={handleResetDefaults}
-                className="haptic-tap-sm inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-surface-elevated border border-hairline text-xs font-medium text-ink-secondary hover:text-ink shrink-0 cursor-pointer"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Reset to Defaults</span>
-              </button>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between gap-2 mb-1.5">
-                <label
-                  htmlFor="setting-announcement"
-                  className="text-xs font-medium text-ink"
-                >
-                  Top Announcement Banner (Optional)
-                </label>
-                <span className="text-[11px] font-mono-tabular text-ink-subtle">
-                  {draftSettings.announcementBanner.length}/{STUDIO_SETTINGS_LIMITS.MAX_ANNOUNCEMENT}
-                </span>
-              </div>
-              <input
-                id="setting-announcement"
-                type="text"
-                maxLength={STUDIO_SETTINGS_LIMITS.MAX_ANNOUNCEMENT}
-                value={draftSettings.announcementBanner}
-                onChange={(e) => handleDraftChange('announcementBanner', e.target.value)}
-                placeholder="e.g. Booking November slots — 50% MoMo deposit secures kickoff this week."
-                className="w-full rounded-xl bg-field border border-hairline-strong px-4 py-3 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-accent"
-              />
-              <p className="text-[11px] text-ink-muted mt-1">
-                Leave empty to hide the announcement bar on the homepage.
-              </p>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between gap-2 mb-1.5">
-                <label
-                  htmlFor="setting-headline"
-                  className="text-xs font-medium text-ink"
-                >
-                  Hero Main Headline
-                </label>
-                <span className="text-[11px] font-mono-tabular text-ink-subtle">
-                  {draftSettings.heroHeadline.length}/{STUDIO_SETTINGS_LIMITS.MAX_HERO_HEADLINE}
-                </span>
-              </div>
-              <input
-                id="setting-headline"
-                type="text"
-                maxLength={STUDIO_SETTINGS_LIMITS.MAX_HERO_HEADLINE}
-                value={draftSettings.heroHeadline}
-                onChange={(e) => handleDraftChange('heroHeadline', e.target.value)}
-                className="w-full rounded-xl bg-field border border-hairline-strong px-4 py-3 text-sm text-ink focus:outline-none focus:border-accent"
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between gap-2 mb-1.5">
-                <label
-                  htmlFor="setting-subheadline"
-                  className="text-xs font-medium text-ink"
-                >
-                  Hero Subheadline
-                </label>
-                <span className="text-[11px] font-mono-tabular text-ink-subtle">
-                  {draftSettings.heroSubheadline.length}/{STUDIO_SETTINGS_LIMITS.MAX_HERO_SUBHEADLINE}
-                </span>
-              </div>
-              <textarea
-                id="setting-subheadline"
-                rows={3}
-                maxLength={STUDIO_SETTINGS_LIMITS.MAX_HERO_SUBHEADLINE}
-                value={draftSettings.heroSubheadline}
-                onChange={(e) => handleDraftChange('heroSubheadline', e.target.value)}
-                className="w-full rounded-xl bg-field border border-hairline-strong px-4 py-3 text-sm text-ink leading-relaxed focus:outline-none focus:border-accent resize-y"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <label
-                    htmlFor="setting-web-price"
-                    className="text-xs font-medium text-ink"
-                  >
-                    Business Website Starting Price
-                  </label>
-                  <span className="text-[11px] font-mono-tabular text-ink-subtle">
-                    {draftSettings.websiteStartingPrice.length}/{STUDIO_SETTINGS_LIMITS.MAX_PRICE_LABEL}
-                  </span>
-                </div>
-                <input
-                  id="setting-web-price"
-                  type="text"
-                  maxLength={STUDIO_SETTINGS_LIMITS.MAX_PRICE_LABEL}
-                  value={draftSettings.websiteStartingPrice}
-                  onChange={(e) =>
-                    handleDraftChange('websiteStartingPrice', e.target.value)
-                  }
-                  placeholder="From GHS 800"
-                  className="w-full rounded-xl bg-field border border-hairline-strong px-4 py-3 text-sm font-mono-tabular text-ink focus:outline-none focus:border-accent"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <label
-                    htmlFor="setting-mobile-price"
-                    className="text-xs font-medium text-ink"
-                  >
-                    Mobile App Starting Price
-                  </label>
-                  <span className="text-[11px] font-mono-tabular text-ink-subtle">
-                    {draftSettings.mobileStartingPrice.length}/{STUDIO_SETTINGS_LIMITS.MAX_PRICE_LABEL}
-                  </span>
-                </div>
-                <input
-                  id="setting-mobile-price"
-                  type="text"
-                  maxLength={STUDIO_SETTINGS_LIMITS.MAX_PRICE_LABEL}
-                  value={draftSettings.mobileStartingPrice}
-                  onChange={(e) =>
-                    handleDraftChange('mobileStartingPrice', e.target.value)
-                  }
-                  placeholder="From GHS 2,500"
-                  className="w-full rounded-xl bg-field border border-hairline-strong px-4 py-3 text-sm font-mono-tabular text-ink focus:outline-none focus:border-accent"
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between gap-2 mb-1.5">
-                <label
-                  htmlFor="setting-founder-bio"
-                  className="text-xs font-medium text-ink"
-                >
-                  Founder Section Intro
-                </label>
-                <span className="text-[11px] font-mono-tabular text-ink-subtle">
-                  {draftSettings.founderBio.length}/{STUDIO_SETTINGS_LIMITS.MAX_FOUNDER_BIO}
-                </span>
-              </div>
-              <textarea
-                id="setting-founder-bio"
-                rows={4}
-                maxLength={STUDIO_SETTINGS_LIMITS.MAX_FOUNDER_BIO}
-                value={draftSettings.founderBio}
-                onChange={(e) => handleDraftChange('founderBio', e.target.value)}
-                className="w-full rounded-xl bg-field border border-hairline-strong px-4 py-3 text-sm text-ink leading-relaxed focus:outline-none focus:border-accent resize-y"
-              />
-            </div>
-
-            {editorNotice && (
-              <p
-                role={editorNotice.type === 'error' ? 'alert' : 'status'}
-                className={`text-xs sm:text-sm font-medium rounded-xl px-4 py-3 border ${
-                  editorNotice.type === 'success'
-                    ? 'text-emerald-600 dark:text-emerald-300 bg-emerald-500/10 border-emerald-500/30'
-                    : editorNotice.type === 'error'
-                    ? 'text-red-600 dark:text-red-300 bg-red-500/10 border-red-500/30'
-                    : 'text-accent bg-accent/10 border-accent/30'
-                }`}
-              >
-                {editorNotice.text}
-              </p>
-            )}
-
-            <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-3 pt-2">
-              <button
-                type="submit"
-                disabled={savingSettings}
-                className="haptic-tap inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-accent-btn text-accent-ink text-sm font-semibold hover:bg-accent-hover disabled:opacity-60 cursor-pointer"
-              >
-                <Save className="w-4 h-4 shrink-0" />
-                <span>
-                  {savingSettings ? 'Publishing...' : 'Save & Publish Changes'}
-                </span>
-              </button>
-            </div>
-          </form>
-        ) : (
-          <div>
-            {/* Filter Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-              <div className="flex flex-wrap items-center gap-1 p-1 rounded-lg bg-field border border-hairline">
-                {(['all', ...STATUS_OPTIONS] as const).map((status) => (
-                  <button
-                    key={status}
-                    type="button"
-                    onClick={() => setStatusFilter(status)}
-                    className={`haptic-tap-sm px-3 py-1.5 rounded-md text-xs font-medium capitalize cursor-pointer ${
-                      statusFilter === status
-                        ? 'bg-accent-btn text-accent-ink'
-                        : 'text-ink-muted hover:text-ink'
-                    }`}
-                  >
-                    {status}
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs font-mono-tabular text-ink-subtle">
-                {filteredMessages.length}{' '}
-                {filteredMessages.length === 1 ? 'message' : 'messages'} ·{' '}
-                <span className={unreadCount > 0 ? 'text-accent font-medium' : ''}>
-                  {unreadCount} unread
-                </span>
-              </p>
-            </div>
-
-            {loadingMessages ? (
-              <p className="text-sm text-ink-muted py-10 text-center">
-                Loading saved inquiries...
-              </p>
-            ) : filteredMessages.length === 0 ? (
-              <div className="rounded-xl bg-field border border-hairline p-10 text-center">
-                <p className="text-base font-medium text-ink mb-1">
-                  No messages in this view
-                </p>
-                <p className="text-sm text-ink-subtle">
-                  New submissions from the contact form will appear here automatically.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {filteredMessages.map((item) => {
-                  const cleanDigits = item.senderPhone.replace(/\D/g, '');
-                  const isUnread = item.status === 'new';
-                  return (
-                    <div
-                      key={item.id}
-                      className={`rounded-xl bg-field border p-5 transition-colors ${
-                        isUnread ? 'border-accent/55' : 'border-hairline'
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-4 pb-3 mb-3 border-b border-hairline">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-display text-lg font-semibold text-ink leading-[1.2]">
-                              {item.senderName}
-                            </h3>
-                            <span
-                              className={`text-[11px] font-mono-tabular uppercase tracking-wider font-semibold ${
-                                isUnread ? 'text-accent' : 'text-ink-subtle'
-                              }`}
-                            >
-                              · {isUnread ? 'Unread' : 'Read'}
-                            </span>
-                          </div>
-                          <p className="text-xs text-ink-muted mt-0.5">
-                            {item.senderEmail}
-                            {item.senderPhone ? ` · ${item.senderPhone}` : ''}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs font-mono-tabular text-accent font-medium">
-                            {item.budgetTier}
-                          </p>
-                          <p className="text-[11px] font-mono-tabular text-ink-subtle mt-0.5">
-                            {formatTimestamp(item.createdAt)}
-                          </p>
-                        </div>
-                      </div>
-
-                      <p className="text-xs text-ink-muted mb-2">
-                        Service: <span className="text-ink font-medium">{item.serviceType}</span>
-                      </p>
-                      <p className="text-sm text-ink-secondary leading-relaxed whitespace-pre-wrap mb-4">
-                        {item.message}
-                      </p>
-
-                      <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-hairline">
-                        <div className="flex items-center gap-2">
-                          <label
-                            htmlFor={`status-${item.id}`}
-                            className="text-xs text-ink-subtle"
-                          >
-                            Status:
-                          </label>
-                          <select
-                            id={`status-${item.id}`}
-                            disabled={updatingId === item.id}
-                            value={item.status}
-                            onChange={(e) =>
-                              handleStatusChange(item.id, e.target.value as MessageStatus)
-                            }
-                            className="rounded-md bg-surface-elevated border border-hairline-strong px-2.5 py-1.5 text-xs text-ink capitalize focus:outline-none focus:border-accent"
-                          >
-                            {STATUS_OPTIONS.map((opt) => (
-                              <option key={opt} value={opt}>
-                                {opt}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            disabled={updatingId === item.id}
-                            onClick={() => handleToggleReadStatus(item)}
-                            aria-pressed={!isUnread}
-                            className={`haptic-tap-sm inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium cursor-pointer disabled:opacity-60 ${
-                              isUnread
-                                ? 'bg-surface-elevated border-accent/45 text-accent hover:bg-accent/10'
-                                : 'bg-surface-elevated border-hairline text-ink-muted hover:text-ink hover:border-hairline-strong'
-                            }`}
-                          >
-                            {isUnread ? (
-                              <>
-                                <MailOpen className="w-3.5 h-3.5 shrink-0" />
-                                <span>Mark as Read</span>
-                              </>
-                            ) : (
-                              <>
-                                <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-                                <span>Mark as Unread</span>
-                              </>
-                            )}
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => openEmailComposer(item)}
-                            aria-expanded={replyTargetId === item.id}
-                            className={`haptic-tap-sm inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs cursor-pointer ${
-                              replyTargetId === item.id
-                                ? 'bg-accent-btn border-accent text-accent-ink font-semibold'
-                                : 'bg-surface-elevated border-hairline text-ink hover:border-accent/50'
-                            }`}
-                          >
-                            <Mail className="w-3.5 h-3.5" />
-                            <span>{replyTargetId === item.id ? 'Close Email' : 'Email'}</span>
-                          </button>
-
-                          {cleanDigits.length >= 9 && (
-                            <a
-                              href={`https://wa.me/${cleanDigits}?text=${encodeURIComponent(
-                                `Hello ${item.senderName}, this is Sablaizer from Aizer Tech following up on your ${item.serviceType} request.`
-                              )}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="haptic-tap-sm inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-surface-elevated border border-hairline text-xs text-emerald-600 dark:text-[#25D366] hover:border-emerald-500/50"
-                            >
-                              <MessageCircle className="w-3.5 h-3.5" />
-                              <span>WhatsApp</span>
-                            </a>
-                          )}
-
-                          <button
-                            type="button"
-                            disabled={updatingId === item.id}
-                            onClick={() => handleDelete(item.id)}
-                            aria-label={`Delete message from ${item.senderName}`}
-                            className="haptic-tap-sm inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-surface-elevated border border-hairline text-xs text-ink-muted hover:text-red-500 dark:hover:text-red-300 hover:border-red-500/40 cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Interactive Email Reply Composer */}
-                      {replyTargetId === item.id && (
-                        <div className="mt-4 pt-4 border-t border-hairline space-y-3">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="text-xs font-semibold text-accent">
-                                Reply by Email
-                              </p>
-                              <p className="text-xs text-ink-muted break-all mt-0.5">
-                                To: <span className="text-ink font-medium">{item.senderEmail}</span>
-                              </p>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={() => handleCopyText(item.senderEmail, 'email')}
-                              className="haptic-tap-sm inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-surface-elevated border border-hairline text-xs text-ink-secondary hover:text-ink cursor-pointer"
-                            >
-                              {copiedField === 'email' ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-500" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" />
-                              )}
-                              <span>{copiedField === 'email' ? 'Email Copied' : 'Copy Email'}</span>
-                            </button>
-                          </div>
-
-                          <div>
-                            <label
-                              htmlFor={`reply-subject-${item.id}`}
-                              className="block text-[11px] text-ink-subtle mb-1"
-                            >
-                              Subject
-                            </label>
-                            <input
-                              id={`reply-subject-${item.id}`}
-                              type="text"
-                              value={replySubject}
-                              onChange={(e) => setReplySubject(e.target.value)}
-                              className="w-full rounded-lg bg-surface-elevated border border-hairline-strong px-3 py-2 text-xs text-ink focus:outline-none focus:border-accent"
-                            />
-                          </div>
-
-                          <div>
-                            <label
-                              htmlFor={`reply-body-${item.id}`}
-                              className="block text-[11px] text-ink-subtle mb-1"
-                            >
-                              Email Message
-                            </label>
-                            <textarea
-                              id={`reply-body-${item.id}`}
-                              rows={5}
-                              value={replyBody}
-                              onChange={(e) => setReplyBody(e.target.value)}
-                              className="w-full rounded-lg bg-surface-elevated border border-hairline-strong px-3 py-2 text-xs text-ink leading-relaxed focus:outline-none focus:border-accent resize-y"
-                            />
-                          </div>
-
-                          {replyNotice && (
-                            <p
-                              role={replyNotice.type === 'error' ? 'alert' : 'status'}
-                              className={`text-xs font-medium rounded-lg px-3 py-2 border ${
-                                replyNotice.type === 'success'
-                                  ? 'text-emerald-600 dark:text-emerald-300 bg-emerald-500/10 border-emerald-500/30'
-                                  : replyNotice.type === 'error'
-                                  ? 'text-red-600 dark:text-red-300 bg-red-500/10 border-red-500/30'
-                                  : 'text-accent bg-accent/10 border-accent/30'
-                              }`}
-                            >
-                              {replyNotice.text}
-                            </p>
-                          )}
-
-                          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5 pt-1">
-                            <button
-                              type="button"
-                              disabled={sendingEmail}
-                              onClick={() => handleRequestSendEmail(item)}
-                              className="haptic-tap inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-accent-btn text-accent-ink text-xs font-semibold hover:bg-accent-hover disabled:opacity-60 cursor-pointer"
-                            >
-                              <Send className="w-3.5 h-3.5 shrink-0" />
-                              <span>
-                                {sendingEmail ? 'Sending Email...' : 'Send Email'}
-                              </span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleCopyText(
-                                  `To: ${item.senderEmail}\nSubject: ${replySubject}\n\n${replyBody}`,
-                                  'reply',
-                                  item
-                                )
-                              }
-                              className="haptic-tap inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-surface-elevated border border-hairline text-xs font-medium text-ink-secondary hover:text-ink cursor-pointer"
-                            >
-                              {copiedField === 'reply' ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5 shrink-0" />
-                              )}
-                              <span>
-                                {copiedField === 'reply' ? 'Copied' : 'Copy Reply'}
-                              </span>
-                            </button>
-
-                            <a
-                              href={`mailto:${item.senderEmail}?subject=${encodeURIComponent(
-                                replySubject
-                              )}&body=${encodeURIComponent(replyBody)}`}
-                              onClick={() => {
-                                void markAsRepliedIfNeeded(item);
-                              }}
-                              className="haptic-tap inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-surface-elevated border border-hairline text-xs font-medium text-ink-muted hover:text-ink"
-                            >
-                              <Mail className="w-3.5 h-3.5 shrink-0" />
-                              <span>Open Mail App</span>
-                            </a>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
+        </div>
       </div>
-    </>
-  );
+    );
+  }
+
+  const navItems: {
+    id: AdminSection;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    badge?: number;
+  }[] = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'messages', label: 'Messages', icon: MessageSquare, badge: unreadCount },
+    { id: 'clients', label: 'Clients', icon: Users },
+    { id: 'projects', label: 'Projects', icon: FolderKanban },
+    { id: 'settings', label: 'Settings', icon: Settings },
+  ];
+
+  const loadingMessages = loadingAizer || loadingLegacy;
 
   return (
-    <>
-      {fullPage ? (
-        <div className="min-h-screen bg-canvas text-ink section-ambient py-6 sm:py-10 px-4 sm:px-6 lg:px-10">
-          <div className="max-w-5xl mx-auto ios-glass rounded-[24px] p-5 sm:p-8">
-            {panelContent}
-          </div>
-        </div>
-      ) : (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="studio-inbox-title"
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
-          onClick={onClose}
-        >
-          <div
-            className="ios-glass max-w-4xl w-full rounded-[24px] p-6 sm:p-8 max-h-[88vh] flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {panelContent}
-          </div>
-        </div>
-      )}
+    <div className="min-h-screen bg-[#0A0A0A] text-white font-admin relative flex flex-col lg:flex-row">
+      {/* Subtle Ambient Gold Glow */}
+      <div
+        className="pointer-events-none fixed top-0 right-0 w-[500px] h-[360px] rounded-full bg-[#D4AF37]/8 blur-[160px]"
+        aria-hidden="true"
+      />
 
-      {/* Explicit Send Confirmation Dialog (Workspace Mutating Action Safeguard) */}
-      {confirmSendItem && (
+      {/* Desktop Left Sidebar */}
+      <aside className="hidden lg:flex lg:w-[264px] lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 z-30 bg-[#0D0D0F]/95 border-r border-[#D4AF37]/18 px-5 py-6 justify-between backdrop-blur-xl">
+        <div>
+          {/* Logo */}
+          <div className="flex items-center gap-3 px-2 pb-6 mb-6 border-b border-white/10">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#FFD700] to-[#B8860B] text-[#0A0A0A] flex items-center justify-center shadow-[0_0_24px_-6px_rgba(212,175,55,0.65)] shrink-0">
+              <Crown className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="font-luxury text-base font-bold tracking-wide gold-gradient-text leading-tight">
+                AIZERTECH
+              </p>
+              <p className="text-[10px] font-mono-tabular uppercase tracking-[0.2em] text-neutral-400">
+                CEO Suite
+              </p>
+            </div>
+          </div>
+
+          <nav aria-label="Admin Navigation" className="space-y-1.5">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const active = activeSection === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    if (item.id === 'messages') setMessageSearchSeed('');
+                    setActiveSection(item.id);
+                  }}
+                  className={`haptic-tap-sm w-full px-4 py-3 rounded-2xl text-sm font-medium flex items-center justify-between cursor-pointer transition-all ${
+                    active
+                      ? 'gold-gradient-btn font-bold'
+                      : 'text-neutral-300 hover:text-white hover:bg-white/[0.05]'
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-3">
+                    <Icon
+                      className={`w-4 h-4 ${
+                        active ? 'text-[#0A0A0A]' : 'text-[#D4AF37]'
+                      }`}
+                    />
+                    <span>{item.label}</span>
+                  </span>
+
+                  {typeof item.badge === 'number' && item.badge > 0 && (
+                    <span
+                      className={`font-mono-tabular text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                        active
+                          ? 'bg-[#0A0A0A] text-[#FFD700]'
+                          : 'bg-[#D4AF37]/20 text-[#FFD700]'
+                      }`}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        <div className="space-y-2 pt-6 border-t border-white/10">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full px-4 py-3 rounded-2xl bg-white/[0.04] border border-white/10 text-xs font-semibold text-neutral-200 hover:border-[#D4AF37]/50 flex items-center gap-2.5 cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4 text-[#D4AF37]" />
+            <span>View Public Site</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="w-full px-4 py-3 rounded-2xl text-xs font-semibold text-red-400 hover:bg-red-500/10 flex items-center gap-2.5 cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Logout</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Viewport */}
+      <div className="flex-1 lg:pl-[264px] flex flex-col min-h-screen pb-24 lg:pb-10">
+        {/* Top Bar */}
+        <header className="sticky top-0 z-20 h-14 sm:h-16 bg-[#0A0A0A]/85 backdrop-blur-xl border-b border-white/10 px-4 sm:px-8 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="lg:hidden inline-flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-[#FFD700] to-[#B8860B] text-[#0A0A0A] shrink-0">
+              <Crown className="w-4 h-4" />
+            </span>
+            <p className="font-sora text-sm sm:text-base font-bold text-white capitalize truncate">
+              <span className="lg:hidden gold-gradient-text mr-2">AIZERTECH ·</span>
+              {activeSection}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={handleCopyAdminLink}
+              className="haptic-tap-sm min-h-[38px] px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/10 text-xs font-medium text-neutral-300 hover:border-[#D4AF37]/50 inline-flex items-center gap-1.5 cursor-pointer"
+            >
+              {copiedAdminLink ? (
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <Link2 className="w-3.5 h-3.5 text-[#D4AF37]" />
+              )}
+              <span className="hidden sm:inline">
+                {copiedAdminLink ? 'Admin Link Copied' : 'Copy /admin'}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="lg:hidden min-h-[38px] px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/10 text-xs font-medium text-neutral-300 inline-flex items-center gap-1 cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-[#D4AF37]" />
+              <span>Site</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSignOut}
+              aria-label="Logout"
+              className="lg:hidden min-h-[38px] min-w-[38px] rounded-xl bg-red-500/10 border border-red-500/25 text-red-300 flex items-center justify-center cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </header>
+
+        {/* Active View Content */}
+        <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 py-6 sm:py-8">
+          {activeSection === 'dashboard' && (
+            <AdminDashboardHome
+              messages={allMessages}
+              projects={projects}
+              loadingMessages={loadingMessages}
+              onNavigateTab={(tab) => setActiveSection(tab)}
+              onOpenMessageModal={(msg) => {
+                setSelectedModalMessage(msg);
+                setActiveSection('messages');
+              }}
+              onOpenNewProjectModal={() => setNewProjectModalOpen(true)}
+              onOpenBroadcastModal={() => setBroadcastModalOpen(true)}
+            />
+          )}
+
+          {activeSection === 'messages' && (
+            <AdminMessagesView
+              messages={allMessages}
+              loadingMessages={loadingMessages}
+              initialSearch={messageSearchSeed}
+              selectedModalMessage={selectedModalMessage}
+              onSelectModalMessage={setSelectedModalMessage}
+              onUpdateStatus={handleUpdateMessageStatus}
+              onDeleteMessage={handleDeleteMessage}
+              hasGmailToken={hasGmailToken}
+              onSendGmail={handleSendGmail}
+            />
+          )}
+
+          {activeSection === 'clients' && (
+            <AdminClientsView
+              messages={allMessages}
+              onFilterMessagesByClient={(queryText) => {
+                setMessageSearchSeed(queryText);
+                setActiveSection('messages');
+              }}
+            />
+          )}
+
+          {activeSection === 'projects' && (
+            <AdminProjectsView
+              projects={projects}
+              messages={allMessages}
+              loadingProjects={loadingProjects}
+              onOpenNewProjectModal={() => setNewProjectModalOpen(true)}
+              onToggleProjectStatus={handleToggleProjectStatus}
+              onDeleteProject={handleDeleteProject}
+            />
+          )}
+
+          {activeSection === 'settings' && (
+            <AdminSettingsView
+              studioSettings={studioSettings}
+              userEmail={user.email || ADMIN_EMAIL}
+              onSaveSettings={handleSaveSettings}
+              onChangePassword={changeAdminPassword}
+            />
+          )}
+        </main>
+      </div>
+
+      {/* Mobile Bottom Navigation */}
+      <nav
+        aria-label="Mobile Admin Navigation"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0A0A0A]/92 backdrop-blur-xl border-t border-[#D4AF37]/20 grid grid-cols-5 h-16 pb-safe"
+      >
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const active = activeSection === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setActiveSection(item.id)}
+              className="relative min-h-[44px] flex flex-col items-center justify-center gap-1 cursor-pointer"
+            >
+              <Icon
+                className={`w-5 h-5 ${
+                  active ? 'text-[#FFD700]' : 'text-neutral-400'
+                }`}
+              />
+              <span
+                className={`text-[10px] font-medium tracking-tight ${
+                  active ? 'text-[#FFD700] font-semibold' : 'text-neutral-400'
+                }`}
+              >
+                {item.label}
+              </span>
+              {typeof item.badge === 'number' && item.badge > 0 && (
+                <span className="absolute top-1.5 right-3 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-[9px] font-bold text-white flex items-center justify-center">
+                  {item.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* + New Project Modal */}
+      {newProjectModalOpen && (
         <div
           role="dialog"
           aria-modal="true"
-          aria-labelledby="confirm-send-title"
-          className="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => !sendingEmail && setConfirmSendItem(null)}
+          aria-labelledby="new-project-heading"
+          onClick={() => setNewProjectModalOpen(false)}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto"
         >
-          <div
-            className="ios-glass max-w-lg w-full rounded-[22px] p-5 sm:p-6 space-y-4"
+          <form
+            onSubmit={handleCreateProject}
             onClick={(e) => e.stopPropagation()}
+            className="luxury-card w-full max-w-lg rounded-3xl p-6 sm:p-8 space-y-4 my-auto"
           >
-            <div className="flex items-start justify-between gap-3 pb-3 border-b border-hairline">
-              <div>
-                <p className="text-xs font-medium text-accent mb-1">
-                  Confirm Gmail Dispatch
-                </p>
-                <h3
-                  id="confirm-send-title"
-                  className="font-display text-lg font-semibold text-ink leading-[1.2]"
-                >
-                  Send email reply to {confirmSendItem.senderName}?
-                </h3>
-              </div>
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <h2
+                id="new-project-heading"
+                className="font-luxury text-xl font-bold text-white"
+              >
+                + New Client Project
+              </h2>
               <button
                 type="button"
-                disabled={sendingEmail}
-                aria-label="Cancel email send"
-                onClick={() => setConfirmSendItem(null)}
-                className="haptic-tap-sm w-9 h-9 rounded-lg bg-surface-elevated border border-hairline flex items-center justify-center text-ink-muted hover:text-ink cursor-pointer"
+                aria-label="Close modal"
+                onClick={() => setNewProjectModalOpen(false)}
+                className="min-w-[38px] min-h-[38px] rounded-xl bg-white/[0.05] text-neutral-300 flex items-center justify-center cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="rounded-xl bg-field border border-hairline p-4 space-y-2 text-xs">
-              <p className="text-ink-muted break-all">
-                From:{' '}
-                <span className="text-ink font-medium">
-                  {user?.email || ADMIN_EMAIL}
-                </span>
-              </p>
-              <p className="text-ink-muted break-all">
-                To:{' '}
-                <span className="text-ink font-medium">
-                  {confirmSendItem.senderEmail}
-                </span>
-              </p>
-              <p className="text-ink-muted break-words">
-                Subject:{' '}
-                <span className="text-ink font-medium">{replySubject}</span>
-              </p>
-              <div className="pt-2 border-t border-hairline">
-                <p className="text-ink-secondary leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto">
-                  {replyBody}
-                </p>
+            <div>
+              <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                Project Title
+              </label>
+              <input
+                type="text"
+                required
+                value={projTitle}
+                onChange={(e) => setProjTitle(e.target.value)}
+                placeholder="e.g. ChopBox Food Delivery App"
+                className="w-full rounded-2xl bg-[#0A0A0A] border border-white/12 px-4 py-3 text-sm text-white focus:outline-none focus:border-[#D4AF37]"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                  Client Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={projClientName}
+                  onChange={(e) => setProjClientName(e.target.value)}
+                  placeholder="Kwame Mensah"
+                  className="w-full rounded-2xl bg-[#0A0A0A] border border-white/12 px-4 py-3 text-sm text-white focus:outline-none focus:border-[#D4AF37]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                  Client Phone (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={projClientPhone}
+                  onChange={(e) => setProjClientPhone(e.target.value)}
+                  placeholder="+233 24 000 0000"
+                  className="w-full rounded-2xl bg-[#0A0A0A] border border-white/12 px-4 py-3 text-sm text-white focus:outline-none focus:border-[#D4AF37]"
+                />
               </div>
             </div>
 
-            {!hasGmailToken && (
-              <p className="text-xs text-ink-muted leading-relaxed">
-                Google may ask you to confirm Gmail sending permission in a quick pop-up before dispatching this message.
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                  Service
+                </label>
+                <select
+                  value={projService}
+                  onChange={(e) => setProjService(e.target.value)}
+                  className="w-full rounded-2xl bg-[#0A0A0A] border border-white/12 px-3 py-3 text-sm text-white focus:outline-none focus:border-[#D4AF37]"
+                >
+                  <option value="Business Website">Business Website</option>
+                  <option value="Mobile App">Mobile App</option>
+                  <option value="Food App Platform">Food App Platform</option>
+                  <option value="Logo & Branding">Logo &amp; Branding</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                  Price (GHS)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step="50"
+                  required
+                  value={projAmount}
+                  onChange={(e) => setProjAmount(e.target.value)}
+                  className="w-full rounded-2xl bg-[#0A0A0A] border border-white/12 px-4 py-3 text-sm font-mono-tabular text-white focus:outline-none focus:border-[#D4AF37]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                  Status
+                </label>
+                <select
+                  value={projStatus}
+                  onChange={(e) =>
+                    setProjStatus(e.target.value as 'in_progress' | 'done')
+                  }
+                  className="w-full rounded-2xl bg-[#0A0A0A] border border-white/12 px-3 py-3 text-sm text-white focus:outline-none focus:border-[#D4AF37]"
+                >
+                  <option value="in_progress">In Progress</option>
+                  <option value="done">Done</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                Notes (Optional)
+              </label>
+              <textarea
+                rows={2}
+                value={projNotes}
+                onChange={(e) => setProjNotes(e.target.value)}
+                placeholder="Deposit received, launch target, deliverables..."
+                className="w-full rounded-2xl bg-[#0A0A0A] border border-white/12 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#D4AF37]"
+              />
+            </div>
+
+            {projError && (
+              <p className="text-xs text-red-300 bg-red-500/12 border border-red-500/35 rounded-2xl px-4 py-2.5">
+                {projError}
               </p>
             )}
 
-            <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-end gap-2.5 pt-2">
+            <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
-                disabled={sendingEmail}
-                onClick={() => setConfirmSendItem(null)}
-                className="haptic-tap px-4 py-2.5 rounded-lg bg-surface-elevated border border-hairline text-xs font-medium text-ink-secondary hover:text-ink cursor-pointer"
+                onClick={() => setNewProjectModalOpen(false)}
+                className="px-4 py-3 rounded-2xl bg-white/[0.05] text-xs font-semibold text-neutral-300 cursor-pointer"
               >
                 Cancel
               </button>
               <button
-                type="button"
-                disabled={sendingEmail}
-                onClick={handleConfirmAndSendEmail}
-                className="haptic-tap inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-accent-btn text-accent-ink text-xs font-semibold hover:bg-accent-hover disabled:opacity-60 cursor-pointer"
+                type="submit"
+                disabled={creatingProject}
+                className="gold-gradient-btn px-5 py-3 rounded-2xl text-xs font-bold inline-flex items-center gap-2 cursor-pointer"
               >
-                <Send className="w-3.5 h-3.5 shrink-0" />
-                <span>
-                  {sendingEmail
-                    ? 'Sending via Gmail...'
-                    : hasGmailToken
-                    ? 'Confirm & Send Email'
-                    : 'Connect Gmail & Send'}
-                </span>
+                {creatingProject && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>Save Project</span>
               </button>
             </div>
+          </form>
+        </div>
+      )}
+
+      {/* Broadcast WhatsApp Modal */}
+      {broadcastModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="broadcast-heading"
+          onClick={() => setBroadcastModalOpen(false)}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="luxury-card w-full max-w-xl rounded-3xl p-6 sm:p-8 space-y-5 my-auto"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div>
+                <h2
+                  id="broadcast-heading"
+                  className="font-luxury text-xl font-bold text-white"
+                >
+                  Broadcast WhatsApp
+                </h2>
+                <p className="text-xs text-neutral-400 mt-0.5">
+                  Send your update to real clients who shared a phone number
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close modal"
+                onClick={() => setBroadcastModalOpen(false)}
+                className="min-w-[38px] min-h-[38px] rounded-xl bg-white/[0.05] text-neutral-300 flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                Broadcast Message
+              </label>
+              <textarea
+                rows={3}
+                value={broadcastText}
+                onChange={(e) => setBroadcastText(e.target.value)}
+                className="w-full rounded-2xl bg-[#0A0A0A] border border-white/12 px-4 py-3 text-sm text-white focus:outline-none focus:border-[#D4AF37]"
+              />
+            </div>
+
+            {clientsWithPhones.length === 0 ? (
+              <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-6 text-center text-xs text-neutral-400">
+                No clients with phone numbers yet, CEO. Once clients leave their WhatsApp numbers, they appear here for 1-tap messaging.
+              </div>
+            ) : (
+              <div className="max-h-64 overflow-y-auto divide-y divide-white/10 pr-1">
+                {clientsWithPhones.map((client) => (
+                  <div
+                    key={client.key}
+                    className="py-3 flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="w-9 h-9 rounded-full bg-gradient-to-br from-[#FFD700] to-[#B8860B] text-[#0A0A0A] font-bold text-xs flex items-center justify-center shrink-0">
+                        {getInitial(client.name)}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-white truncate">
+                          {client.name}
+                        </p>
+                        <p className="text-[11px] font-mono-tabular text-neutral-400">
+                          {client.phone}
+                        </p>
+                      </div>
+                    </div>
+
+                    <a
+                      href={buildClientWhatsAppHref(
+                        client.phone,
+                        `Hi ${client.name}, ${broadcastText}`
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-[#25D366]/15 border border-[#25D366]/45 text-xs font-semibold text-[#25D366] hover:bg-[#25D366]/25 inline-flex items-center gap-1.5 shrink-0"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5" />
+                      <span>Send</span>
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 };

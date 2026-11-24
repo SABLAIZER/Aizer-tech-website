@@ -26,7 +26,10 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isVerified() && request.auth.token.email == 'sablahevans0@gmail.com';
+      return isVerified() && (
+        request.auth.token.email == 'sablahevans0@gmail.com' ||
+        request.auth.token.email == 'sablaizer@gmail.com'
+      );
     }
 
     function isValidEmail(email) {
@@ -34,6 +37,10 @@ service cloud.firestore {
         email.size() >= 5 &&
         email.size() <= 150 &&
         email.matches('^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$');
+    }
+
+    function isValidMessageStatus(status) {
+      return status is string && status in ['new', 'reviewed', 'replied', 'done', 'archived'];
     }
 
     function isValidContactMessage(data) {
@@ -75,7 +82,7 @@ service cloud.firestore {
           'GHS 5,000+'
         ] &&
         data.message is string && data.message.size() >= 10 && data.message.size() <= 2000 &&
-        data.status is string && data.status in ['new', 'reviewed', 'replied', 'archived'] &&
+        isValidMessageStatus(data.status) &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
     }
@@ -103,6 +110,106 @@ service cloud.firestore {
       allow delete: if isValidId(messageId) && isAdmin();
     }
 
+    function isValidAizerTechMessage(data) {
+      return data.keys().hasAll([
+          'name',
+          'email',
+          'phone',
+          'service',
+          'budget',
+          'message',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'name',
+          'email',
+          'phone',
+          'service',
+          'budget',
+          'message',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
+        isValidEmail(data.email) &&
+        data.phone is string && data.phone.size() <= 30 &&
+        data['service'] is string && data['service'].size() >= 2 && data['service'].size() <= 100 &&
+        data.budget is string && data.budget.size() >= 1 && data.budget.size() <= 60 &&
+        data.message is string && data.message.size() >= 5 && data.message.size() <= 2000 &&
+        isValidMessageStatus(data.status) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    match /aizertech_messages/{messageId} {
+      allow get: if isValidId(messageId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(messageId) &&
+        isValidAizerTechMessage(incoming()) &&
+        incoming().status == 'new' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(messageId) &&
+        isAdmin() &&
+        isValidMessageStatus(incoming().status) &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+      allow delete: if isValidId(messageId) && isAdmin();
+    }
+
+    function isValidStudioProject(data) {
+      return data.keys().hasAll([
+          'title',
+          'clientName',
+          'clientPhone',
+          'serviceType',
+          'amountGhs',
+          'status',
+          'notes',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'title',
+          'clientName',
+          'clientPhone',
+          'serviceType',
+          'amountGhs',
+          'status',
+          'notes',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.title is string && data.title.size() >= 2 && data.title.size() <= 120 &&
+        data.clientName is string && data.clientName.size() >= 2 && data.clientName.size() <= 100 &&
+        data.clientPhone is string && data.clientPhone.size() <= 30 &&
+        data.serviceType is string && data.serviceType.size() >= 2 && data.serviceType.size() <= 80 &&
+        data.amountGhs is number && data.amountGhs >= 0 && data.amountGhs <= 10000000 &&
+        data.status is string && data.status in ['in_progress', 'done'] &&
+        data.notes is string && data.notes.size() <= 1000 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    match /studioProjects/{projectId} {
+      allow get: if isValidId(projectId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(projectId) &&
+        isAdmin() &&
+        isValidStudioProject(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(projectId) &&
+        isAdmin() &&
+        isValidStudioProject(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time;
+      allow delete: if isValidId(projectId) && isAdmin();
+    }
+
     function isValidStudioSettings(data) {
       return data.keys().hasAll([
           'heroHeadline',
@@ -110,6 +217,9 @@ service cloud.firestore {
           'announcementBanner',
           'websiteStartingPrice',
           'mobileStartingPrice',
+          'brandingStartingPrice',
+          'whatsappNumber',
+          'contactEmail',
           'founderBio',
           'updatedAt'
         ]) &&
@@ -119,6 +229,9 @@ service cloud.firestore {
           'announcementBanner',
           'websiteStartingPrice',
           'mobileStartingPrice',
+          'brandingStartingPrice',
+          'whatsappNumber',
+          'contactEmail',
           'founderBio',
           'updatedAt'
         ]) &&
@@ -127,6 +240,9 @@ service cloud.firestore {
         data.announcementBanner is string && data.announcementBanner.size() <= 160 &&
         data.websiteStartingPrice is string && data.websiteStartingPrice.size() >= 2 && data.websiteStartingPrice.size() <= 40 &&
         data.mobileStartingPrice is string && data.mobileStartingPrice.size() >= 2 && data.mobileStartingPrice.size() <= 40 &&
+        data.brandingStartingPrice is string && data.brandingStartingPrice.size() >= 2 && data.brandingStartingPrice.size() <= 40 &&
+        data.whatsappNumber is string && data.whatsappNumber.size() >= 7 && data.whatsappNumber.size() <= 20 &&
+        isValidEmail(data.contactEmail) &&
         data.founderBio is string && data.founderBio.size() >= 20 && data.founderBio.size() <= 600 &&
         data.updatedAt is timestamp;
     }
