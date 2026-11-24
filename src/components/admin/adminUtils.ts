@@ -4,8 +4,10 @@ import {
   LEAD_PIPELINE_STAGES,
   LeadPipelineStage,
   MessageStatus,
+  RegisteredUserRecord,
   StudioProjectRecord,
   StudioSettings,
+  VisitRecord,
 } from '../../types';
 
 export function getTimestampMs(
@@ -352,3 +354,139 @@ export function computeDashboardMetrics(
     pendingPayments,
   };
 }
+
+export function formatDateKeyLocal(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export interface VisitorAnalyticsSummary {
+  totalVisitors: number;
+  visitorsToday: number;
+  visitorsThisWeek: number;
+  registeredUsersCount: number;
+  conversionRatePct: number;
+}
+
+export function getVisitorAnalytics(
+  visits: VisitRecord[],
+  users: RegisteredUserRecord[]
+): VisitorAnalyticsSummary {
+  const now = new Date();
+  const todayKey = formatDateKeyLocal(now);
+
+  const last7Keys = new Set<string>();
+  for (let i = 0; i < 7; i += 1) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    last7Keys.add(formatDateKeyLocal(d));
+  }
+
+  const totalVisitors = visits.length;
+  const visitorsToday = visits.filter((v) => v.dateKey === todayKey).length;
+  const visitorsThisWeek = visits.filter((v) => last7Keys.has(v.dateKey)).length;
+  const registeredUsersCount = users.length;
+  const conversionRatePct =
+    totalVisitors > 0
+      ? Math.min(100, Math.round((registeredUsersCount / totalVisitors) * 100))
+      : 0;
+
+  return {
+    totalVisitors,
+    visitorsToday,
+    visitorsThisWeek,
+    registeredUsersCount,
+    conversionRatePct,
+  };
+}
+
+export interface VisitorDayBucket {
+  dateKey: string;
+  label: string;
+  count: number;
+  isToday: boolean;
+}
+
+export function getLast7DaysVisitorBuckets(
+  visits: VisitRecord[]
+): VisitorDayBucket[] {
+  const now = new Date();
+  const todayKey = formatDateKeyLocal(now);
+  const counts = new Map<string, number>();
+
+  for (const visit of visits) {
+    if (visit.dateKey) {
+      counts.set(visit.dateKey, (counts.get(visit.dateKey) || 0) + 1);
+    }
+  }
+
+  const result: VisitorDayBucket[] = [];
+  for (let offset = 6; offset >= 0; offset -= 1) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset);
+    const key = formatDateKeyLocal(d);
+    const label = d.toLocaleDateString('en-GH', { weekday: 'short' });
+    result.push({
+      dateKey: key,
+      label,
+      count: counts.get(key) || 0,
+      isToday: key === todayKey,
+    });
+  }
+  return result;
+}
+
+export interface UserGrowthBucket {
+  dateKey: string;
+  label: string;
+  dailyNew: number;
+  cumulativeTotal: number;
+}
+
+export function getLast7DaysUserGrowthBuckets(
+  users: RegisteredUserRecord[]
+): UserGrowthBucket[] {
+  const now = new Date();
+  const windowStart = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() - 6,
+    0,
+    0,
+    0,
+    0
+  );
+  const windowStartMs = windowStart.getTime();
+
+  let baselineBeforeWindow = 0;
+  const dailyMap = new Map<string, number>();
+
+  for (const user of users) {
+    const ms = getTimestampMs(user.firstLoginAt);
+    if (!ms || ms < windowStartMs) {
+      baselineBeforeWindow += 1;
+    } else {
+      const key = formatDateKeyLocal(new Date(ms));
+      dailyMap.set(key, (dailyMap.get(key) || 0) + 1);
+    }
+  }
+
+  let runningTotal = baselineBeforeWindow;
+  const result: UserGrowthBucket[] = [];
+
+  for (let offset = 6; offset >= 0; offset -= 1) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset);
+    const key = formatDateKeyLocal(d);
+    const dailyNew = dailyMap.get(key) || 0;
+    runningTotal += dailyNew;
+    result.push({
+      dateKey: key,
+      label: d.toLocaleDateString('en-GH', { weekday: 'short' }),
+      dailyNew,
+      cumulativeTotal: runningTotal,
+    });
+  }
+
+  return result;
+}
+

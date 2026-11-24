@@ -1,8 +1,6 @@
 import React from 'react';
 import { MessageCircle } from 'lucide-react';
 import {
-  buildWhatsAppUrl,
-  formatWhatsAppDisplay,
   THEME_OPTIONS,
   ThemeMode,
   WebsiteCmsData,
@@ -13,12 +11,14 @@ interface FooterProps {
   theme: ThemeMode;
   cms: WebsiteCmsData;
   onChangeTheme: (theme: ThemeMode) => void;
+  onChatWithUs: () => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
   theme,
   cms,
   onChangeTheme,
+  onChatWithUs,
 }) => {
   const webService =
     cms.services.find((s) => s.name.toLowerCase().includes('web')) ||
@@ -64,18 +64,14 @@ export const Footer: React.FC<FooterProps> = ({
           <a href="#contact" className="hover:text-ink transition-colors">
             Contact
           </a>
-          <a
-            href={buildWhatsAppUrl(
-              'Hello Aizer Tech, I would like to discuss a website or mobile app.',
-              cms.hero.whatsappNumber
-            )}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-[#25D366] hover:opacity-85 font-medium"
+          <button
+            type="button"
+            onClick={onChatWithUs}
+            className="inline-flex items-center gap-1.5 text-[#25D366] hover:opacity-85 font-medium cursor-pointer"
           >
             <MessageCircle className="w-4 h-4" />
-            <span>WhatsApp {formatWhatsAppDisplay(cms.hero.whatsappNumber)}</span>
-          </a>
+            <span>Chat With Us</span>
+          </button>
         </div>
       </div>
 

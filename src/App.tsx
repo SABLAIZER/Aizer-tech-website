@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
 import { MessageCircle } from 'lucide-react';
 import { MotionConfig } from 'motion/react';
 import { AdminInboxModal } from './components/AdminInboxModal';
 import { BookCallSection } from './components/BookCallSection';
+import { ClientPortalPage } from './components/ClientPortalPage';
 import { ClientSuccessSection } from './components/ClientSuccessSection';
 import { ContactSection } from './components/ContactSection';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -11,22 +13,33 @@ import { FoodAppShowcase } from './components/FoodAppShowcase';
 import { Footer } from './components/Footer';
 import { FounderSection } from './components/FounderSection';
 import { Hero } from './components/Hero';
+import {
+  FirstLoginPhoneModal,
+  LoginGateModal,
+} from './components/LoginGateModal';
 import { Navbar } from './components/Navbar';
 import { ProcessSection } from './components/ProcessSection';
 import { ServicesSection } from './components/ServicesSection';
-import { db } from './firebase';
+import { auth, db, googleSignInBasic, signOutAdmin } from './firebase';
 import {
   BudgetTier,
-  buildWhatsAppUrl,
   DEFAULT_STUDIO_SETTINGS,
   DEFAULT_WEBSITE_CMS,
+  isAllowedAdminEmail,
+  LoginGateReason,
   normalizeWebsiteCms,
+  RegisteredUserRecord,
   ServiceType,
   StudioSettings,
   TestimonialRecord,
   ThemeMode,
   WebsiteCmsData,
 } from './types';
+import {
+  saveUserPhoneAndMarkPrompted,
+  trackUniqueDailyVisit,
+  upsertRegisteredUserProfile,
+} from './utils/visitorTracker';
 
 const THEME_STORAGE_KEY = 'aizer-theme';
 const LIVE_CMS_CACHE_KEY = 'aizer_live_website_cache_v1';
@@ -34,7 +47,11 @@ const LIVE_CMS_CACHE_KEY = 'aizer_live_website_cache_v1';
 function getInitialTheme(): ThemeMode {
   try {
     const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (saved === 'obsidian' || saved === 'midnight-gold' || saved === 'light-glass') {
+    if (
+      saved === 'obsidian' ||
+      saved === 'midnight-gold' ||
+      saved === 'light-glass'
+    ) {
       return saved;
     }
   } catch {
@@ -81,14 +98,41 @@ function isAdminUrlRequested(): boolean {
   }
 }
 
+function isMyAccountUrlRequested(): boolean {
+  try {
+    const hash = window.location.hash.toLowerCase().replace(/\/+$/, '');
+    const pathname = window.location.pathname.toLowerCase().replace(/\/+$/, '');
+    return pathname === '/my-account' || hash === '#my-account';
+  } catch {
+    return false;
+  }
+}
+
 export default function App() {
   const initialCache = getCachedLiveCms();
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const [selectedService, setSelectedService] = useState<ServiceType>(
     'Business Website (from GHS 800)'
   );
-  const [selectedBudget, setSelectedBudget] = useState<BudgetTier>('GHS 800 - 1,500');
+  const [selectedBudget, setSelectedBudget] =
+    useState<BudgetTier>('GHS 800 - 1,500');
   const [inboxOpen, setInboxOpen] = useState<boolean>(isAdminUrlRequested);
+  const [portalOpen, setPortalOpen] = useState<boolean>(false);
+  const [portalInitialTab, setPortalInitialTab] = useState<
+    'chat' | 'requests' | 'invoices'
+  >('chat');
+
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState<boolean>(false);
+  const [userProfile, setUserProfile] =
+    useState<RegisteredUserRecord | null>(null);
+  const [loginModalOpen, setLoginModalOpen] = useState<boolean>(false);
+  const [loginReason, setLoginReason] = useState<LoginGateReason>('login');
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [phonePromptOpen, setPhonePromptOpen] = useState<boolean>(false);
+
+  const pendingActionRef = useRef<(() => void) | null>(null);
+  const visitTrackedRef = useRef<boolean>(false);
 
   const [liveCms, setLiveCms] = useState<WebsiteCmsData>(initialCache.cms);
   const [cmsLoading, setCmsLoading] = useState<boolean>(!initialCache.hasCache);
@@ -100,17 +144,134 @@ export default function App() {
   const [testimonials, setTestimonials] = useState<TestimonialRecord[]>([]);
   const [testimonialsLoading, setTestimonialsLoading] = useState<boolean>(true);
 
+  const openMyAccount = (tab: 'chat' | 'requests' | 'invoices' = 'chat') => {
+    setPortalInitialTab(tab);
+    setPortalOpen(true);
+    try {
+      if (window.location.pathname !== '/my-account') {
+        window.history.pushState(null, '', '/my-account');
+      }
+    } catch {
+      // Ignore history errors
+    }
+  };
+
+  const closeMyAccount = () => {
+    setPortalOpen(false);
+    try {
+      const lowerPath = window.location.pathname.toLowerCase().replace(/\/+$/, '');
+      if (lowerPath === '/my-account' || window.location.hash.toLowerCase() === '#my-account') {
+        window.history.replaceState(null, '', '/');
+      }
+    } catch {
+      // Ignore history errors
+    }
+  };
+
+  // Route synchronization for /admin and /my-account
   useEffect(() => {
-    const syncAdminRoute = () => {
-      setInboxOpen(isAdminUrlRequested());
+    const syncRoutes = () => {
+      const adminRequested = isAdminUrlRequested();
+      setInboxOpen(adminRequested);
+
+      if (!adminRequested && isMyAccountUrlRequested()) {
+        if (authUser && authUser.emailVerified) {
+          setPortalOpen(true);
+        } else if (authReady) {
+          setPortalOpen(false);
+          setLoginReason('my-account');
+          pendingActionRef.current = () => openMyAccount('chat');
+          setLoginModalOpen(true);
+        }
+      } else if (!isMyAccountUrlRequested()) {
+        setPortalOpen(false);
+      }
     };
-    window.addEventListener('hashchange', syncAdminRoute);
-    window.addEventListener('popstate', syncAdminRoute);
+
+    window.addEventListener('hashchange', syncRoutes);
+    window.addEventListener('popstate', syncRoutes);
     return () => {
-      window.removeEventListener('hashchange', syncAdminRoute);
-      window.removeEventListener('popstate', syncAdminRoute);
+      window.removeEventListener('hashchange', syncRoutes);
+      window.removeEventListener('popstate', syncRoutes);
     };
+  }, [authUser, authReady]);
+
+  // Firebase Auth listener + Registered User profile sync
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      setAuthUser(firebaseUser);
+      setAuthReady(true);
+
+      if (firebaseUser && firebaseUser.emailVerified) {
+        upsertRegisteredUserProfile(firebaseUser)
+          .then(({ needsPhonePrompt }) => {
+            if (
+              needsPhonePrompt &&
+              !isAdminUrlRequested() &&
+              !isAllowedAdminEmail(firebaseUser.email)
+            ) {
+              setPhonePromptOpen(true);
+            }
+          })
+          .catch(() => {});
+
+        if (isMyAccountUrlRequested() && !isAdminUrlRequested()) {
+          setPortalOpen(true);
+        }
+      } else {
+        setUserProfile(null);
+        setPhonePromptOpen(false);
+        setPortalOpen(false);
+        if (isMyAccountUrlRequested() && !isAdminUrlRequested()) {
+          setLoginReason('my-account');
+          pendingActionRef.current = () => openMyAccount('chat');
+          setLoginModalOpen(true);
+        }
+      }
+    });
+
+    return () => unsubAuth();
   }, []);
+
+  // Subscribe to current logged-in user's aizertech_users document
+  useEffect(() => {
+    if (!authUser || !authUser.emailVerified) {
+      setUserProfile(null);
+      return;
+    }
+
+    const unsubProfile = onSnapshot(
+      doc(db, 'aizertech_users', authUser.uid),
+      (snap) => {
+        if (!snap.exists()) return;
+        const d = snap.data();
+        setUserProfile({
+          uid: String(d.uid || authUser.uid),
+          name: String(d.name || authUser.displayName || 'Client'),
+          email: String(d.email || authUser.email || ''),
+          photoUrl: String(d.photoUrl || authUser.photoURL || ''),
+          phone: String(d.phone || ''),
+          phonePrompted: Boolean(d.phonePrompted),
+          firstLoginAt: d.firstLoginAt || null,
+          lastActiveAt: d.lastActiveAt || null,
+          totalRequests: Number(d.totalRequests) || 0,
+        });
+      },
+      () => {}
+    );
+
+    return () => unsubProfile();
+  }, [authUser]);
+
+  // Real-time unique daily visitor tracking (excludes admins & /admin route)
+  useEffect(() => {
+    if (!authReady || visitTrackedRef.current) return;
+    visitTrackedRef.current = true;
+    void trackUniqueDailyVisit({
+      isAdmin: isAllowedAdminEmail(authUser?.email),
+      isAdminRoute: isAdminUrlRequested(),
+    });
+  }, [authReady, authUser]);
 
   // Primary real-time subscription to aizertech_live/website
   useEffect(() => {
@@ -136,7 +297,7 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Legacy studioSettings/public sync (also keeps Admin Settings backward-compatible)
+  // Legacy studioSettings/public sync
   useEffect(() => {
     const settingsRef = doc(db, 'studioSettings', 'public');
     const unsubscribe = onSnapshot(
@@ -197,7 +358,8 @@ export default function App() {
               ? data.momoName
               : DEFAULT_STUDIO_SETTINGS.momoName,
           autoReplyMessage:
-            typeof data.autoReplyMessage === 'string' && data.autoReplyMessage.trim()
+            typeof data.autoReplyMessage === 'string' &&
+            data.autoReplyMessage.trim()
               ? data.autoReplyMessage
               : DEFAULT_STUDIO_SETTINGS.autoReplyMessage,
           workingHours:
@@ -208,7 +370,6 @@ export default function App() {
         };
         setStudioSettings(nextSettings);
 
-        // If aizertech_live/website hasn't been published yet, reflect studioSettings cleanly
         if (!hasLiveDoc) {
           setLiveCms((prev) => ({
             ...prev,
@@ -232,7 +393,7 @@ export default function App() {
     return () => unsubscribe();
   }, [hasLiveDoc]);
 
-  // Real-time subscription to approved public testimonials (client-sorted to avoid composite index dependency)
+  // Real-time approved public testimonials
   useEffect(() => {
     const testimonialsQuery = query(
       collection(db, 'aizertech_testimonials'),
@@ -290,16 +451,94 @@ export default function App() {
     }
   };
 
-  const handleSelectService = (service: ServiceType, budget: BudgetTier) => {
-    setSelectedService(service);
-    setSelectedBudget(budget);
-    scrollToSection('contact');
+  const requireAuthThen = (reason: LoginGateReason, action: () => void) => {
+    if (authUser && authUser.emailVerified) {
+      action();
+      return;
+    }
+    pendingActionRef.current = action;
+    setLoginReason(reason);
+    setLoginError(null);
+    setLoginModalOpen(true);
+  };
+
+  const handleOpenLoginOnly = (reason: LoginGateReason = 'login') => {
+    pendingActionRef.current = null;
+    setLoginReason(reason);
+    setLoginError(null);
+    setLoginModalOpen(true);
+  };
+
+  const handleGooglePopupLogin = async () => {
+    setLoginError(null);
+    try {
+      const signedUser = await googleSignInBasic(true);
+      setAuthUser(signedUser);
+
+      if (signedUser.emailVerified) {
+        const { needsPhonePrompt } = await upsertRegisteredUserProfile(signedUser);
+        if (needsPhonePrompt && !isAllowedAdminEmail(signedUser.email)) {
+          setPhonePromptOpen(true);
+        }
+      }
+
+      setLoginModalOpen(false);
+      const nextAction = pendingActionRef.current;
+      pendingActionRef.current = null;
+      if (nextAction) {
+        window.setTimeout(() => nextAction(), 60);
+      }
+    } catch (error) {
+      const msg =
+        error instanceof Error
+          ? error.message
+          : 'Could not complete Google sign-in. Please allow pop-ups and try again.';
+      if (msg.includes('auth/unauthorized-domain')) {
+        const host =
+          typeof window !== 'undefined' ? window.location.hostname : 'this domain';
+        setLoginError(
+          `Domain "${host}" is not authorized yet in Firebase Auth → Settings → Authorized domains.`
+        );
+      } else {
+        setLoginError(msg);
+      }
+    }
+  };
+
+  const handleClientLogout = async () => {
+    closeMyAccount();
+    await signOutAdmin();
+  };
+
+  const handleGatedChat = () => {
+    requireAuthThen('chat', () => openMyAccount('chat'));
+  };
+
+  const handleGatedQuote = (service?: ServiceType, budget?: BudgetTier) => {
+    requireAuthThen('quote', () => {
+      if (service) setSelectedService(service);
+      if (budget) setSelectedBudget(budget);
+      scrollToSection('contact');
+    });
   };
 
   const handleBuildFoodApp = () => {
-    setSelectedService('Food App / Custom Platform');
-    setSelectedBudget('GHS 2,500 - 5,000');
-    scrollToSection('contact');
+    handleGatedQuote('Food App / Custom Platform', 'GHS 2,500 - 5,000');
+  };
+
+  const handleSaveFirstLoginPhone = async (phone: string) => {
+    if (!authUser) return;
+    await saveUserPhoneAndMarkPrompted(authUser.uid, phone);
+    setPhonePromptOpen(false);
+  };
+
+  const handleSkipFirstLoginPhone = async () => {
+    if (!authUser) {
+      setPhonePromptOpen(false);
+      return;
+    }
+    await saveUserPhoneAndMarkPrompted(authUser.uid, '');
+    setPhonePromptOpen(false);
   };
 
   const handleCloseInbox = () => {
@@ -329,25 +568,51 @@ export default function App() {
             studioSettings={studioSettings}
             onClose={handleCloseInbox}
           />
+        ) : portalOpen && authUser && authUser.emailVerified ? (
+          <ClientPortalPage
+            user={authUser}
+            userProfile={userProfile}
+            cms={liveCms}
+            studioSettings={studioSettings}
+            initialTab={portalInitialTab}
+            onBackToSite={closeMyAccount}
+            onJumpToSection={(sectionId) => {
+              closeMyAccount();
+              window.setTimeout(() => scrollToSection(sectionId), 80);
+            }}
+            onSavePhone={async (phone) => {
+              await saveUserPhoneAndMarkPrompted(authUser.uid, phone);
+            }}
+            onLogout={handleClientLogout}
+          />
         ) : (
           <div className="min-h-screen bg-canvas text-ink transition-colors duration-200">
             <Navbar
-              whatsappNumber={liveCms.hero.whatsappNumber}
-              onNavigateContact={() => scrollToSection('contact')}
+              authUser={authUser}
+              userProfile={userProfile}
+              onNavigateContact={() => handleGatedQuote()}
+              onOpenLogin={() => handleOpenLoginOnly('login')}
+              onOpenMyAccount={() =>
+                requireAuthThen('my-account', () => openMyAccount('chat'))
+              }
+              onLogout={handleClientLogout}
+              onChatWithUs={handleGatedChat}
             />
 
             <main>
               <Hero
                 cms={liveCms}
                 loading={cmsLoading}
-                onStartProject={() => scrollToSection('contact')}
+                onStartProject={() => handleGatedQuote()}
+                onChatWithUs={handleGatedChat}
                 onExplorePortfolio={() => scrollToSection('portfolio')}
               />
 
               <ServicesSection
                 cms={liveCms}
                 loading={cmsLoading}
-                onSelectService={handleSelectService}
+                onSelectService={handleGatedQuote}
+                onChatWithUs={handleGatedChat}
               />
 
               <FoodAppShowcase
@@ -363,12 +628,15 @@ export default function App() {
               <ClientSuccessSection
                 testimonials={testimonials}
                 loading={testimonialsLoading}
-                onStartProject={() => scrollToSection('contact')}
+                onStartProject={() => handleGatedQuote()}
               />
 
               <BookCallSection
                 cms={liveCms}
                 workingHours={studioSettings.workingHours}
+                authUser={authUser}
+                userProfile={userProfile}
+                onRequireLogin={(reason) => handleOpenLoginOnly(reason)}
               />
 
               <ContactSection
@@ -376,8 +644,12 @@ export default function App() {
                 studioSettings={studioSettings}
                 selectedService={selectedService}
                 selectedBudget={selectedBudget}
+                authUser={authUser}
+                userProfile={userProfile}
                 onChangeService={setSelectedService}
                 onChangeBudget={setSelectedBudget}
+                onRequireLogin={(reason) => handleOpenLoginOnly(reason)}
+                onOpenMyAccount={(tab) => openMyAccount(tab || 'chat')}
               />
             </main>
 
@@ -385,24 +657,44 @@ export default function App() {
               theme={theme}
               cms={liveCms}
               onChangeTheme={setTheme}
+              onChatWithUs={handleGatedChat}
             />
 
-            {/* Compact Floating iOS Glass WhatsApp Quick Action */}
-            <a
-              href={buildWhatsAppUrl(
-                'Hello Aizer Tech, I saw your portfolio and would like to start a project.',
-                liveCms.hero.whatsappNumber
-              )}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Chat with Aizer Tech on WhatsApp"
-              className="haptic-tap fixed bottom-5 right-5 z-30 h-11 px-4 rounded-full bg-[#25D366]/90 backdrop-blur-xl border border-white/25 text-[#070708] text-xs font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_12px_32px_-8px_rgba(37,211,102,0.45)] hover:bg-[#2EE372] inline-flex items-center gap-2 whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#25D366]"
+            {/* Compact Floating iOS Glass Chat With Us Quick Action (Strictly Login-Gated) */}
+            <button
+              type="button"
+              onClick={handleGatedChat}
+              aria-label="Chat With Us"
+              className="haptic-tap fixed bottom-5 right-5 z-30 h-11 px-4 rounded-full bg-[#25D366]/90 backdrop-blur-xl border border-white/25 text-[#070708] text-xs font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_12px_32px_-8px_rgba(37,211,102,0.45)] hover:bg-[#2EE372] inline-flex items-center gap-2 whitespace-nowrap cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#25D366]"
             >
               <MessageCircle className="w-4 h-4" />
-              <span>WhatsApp</span>
-            </a>
+              <span>Chat With Us</span>
+            </button>
           </div>
         )}
+
+        <LoginGateModal
+          open={loginModalOpen}
+          reason={loginReason}
+          authError={loginError}
+          onGoogleLogin={handleGooglePopupLogin}
+          onClose={() => {
+            setLoginModalOpen(false);
+            pendingActionRef.current = null;
+            closeMyAccount();
+          }}
+        />
+
+        <FirstLoginPhoneModal
+          open={phonePromptOpen && !inboxOpen}
+          userName={
+            userProfile?.name ||
+            authUser?.displayName?.split(' ')[0] ||
+            'there'
+          }
+          onSavePhone={handleSaveFirstLoginPhone}
+          onSkip={handleSkipFirstLoginPhone}
+        />
       </ErrorBoundary>
     </MotionConfig>
   );

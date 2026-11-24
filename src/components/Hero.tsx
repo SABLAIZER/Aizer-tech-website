@@ -2,7 +2,6 @@ import React from 'react';
 import { ArrowUpRight, MessageCircle, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 import {
-  buildWhatsAppUrl,
   formatWhatsAppDisplay,
   WebsiteCmsData,
 } from '../types';
@@ -12,6 +11,7 @@ interface HeroProps {
   cms: WebsiteCmsData;
   loading?: boolean;
   onStartProject: () => void;
+  onChatWithUs: () => void;
   onExplorePortfolio: () => void;
 }
 
@@ -19,6 +19,7 @@ export const Hero: React.FC<HeroProps> = ({
   cms,
   loading = false,
   onStartProject,
+  onChatWithUs,
   onExplorePortfolio,
 }) => {
   const { hero, services } = cms;
@@ -114,22 +115,18 @@ export const Hero: React.FC<HeroProps> = ({
                 onClick={onStartProject}
                 className="haptic-tap w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 sm:px-6 py-3.5 rounded-xl bg-accent-btn text-accent-ink text-sm font-semibold hover:bg-accent-hover shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_12px_30px_-10px_rgba(212,168,83,0.42)] sm:whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               >
-                <span>Request a Quote</span>
+                <span>Get Quote</span>
                 <ArrowUpRight className="w-4 h-4 shrink-0" />
               </button>
 
-              <a
-                href={buildWhatsAppUrl(
-                  'Hello Aizer Tech, I would like to discuss building a website or mobile app.',
-                  hero.whatsappNumber
-                )}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="haptic-tap ios-glass-subtle w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-5 sm:px-6 py-3.5 rounded-xl text-ink text-sm font-medium hover:border-[#25D366]/60 sm:whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#25D366]"
+              <button
+                type="button"
+                onClick={onChatWithUs}
+                className="haptic-tap ios-glass-subtle w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-5 sm:px-6 py-3.5 rounded-xl text-ink text-sm font-medium hover:border-[#25D366]/60 sm:whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#25D366]"
               >
                 <MessageCircle className="w-4 h-4 text-[#25D366] shrink-0" />
-                <span>WhatsApp {whatsappDisplay}</span>
-              </a>
+                <span>Chat With Us</span>
+              </button>
 
               <button
                 type="button"

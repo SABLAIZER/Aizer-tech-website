@@ -1,19 +1,25 @@
 import React from 'react';
 import {
+  Activity,
   ArrowRight,
   ArrowUpRight,
   Check,
   Clock,
   Copy,
   Crown,
+  Eye,
   Flame,
   FolderPlus,
+  Globe,
   Inbox,
   Megaphone,
   MessageCircle,
-  MessageSquare,
+  Monitor,
   Receipt,
+  Smartphone,
   Sparkles,
+  TrendingUp,
+  UserCheck,
   Users,
   Wallet,
 } from 'lucide-react';
@@ -22,17 +28,23 @@ import {
   ContactMessageRecord,
   formatAutoReplyTemplate,
   InvoiceRecord,
+  RegisteredUserRecord,
   StudioProjectRecord,
   StudioSettings,
+  VisitRecord,
 } from '../../types';
 import {
   buildClientWhatsAppHref,
   computeDashboardMetrics,
+  formatFullDateTime,
   formatGhs,
   formatTimeAgo,
   getInitial,
+  getLast7DaysUserGrowthBuckets,
+  getLast7DaysVisitorBuckets,
   getPipelineStageMeta,
   getTopServicesBreakdown,
+  getVisitorAnalytics,
   getWeeklyMessageCounts,
   normalizePhoneKey,
 } from './adminUtils';
@@ -41,10 +53,20 @@ interface AdminDashboardHomeProps {
   messages: ContactMessageRecord[];
   projects: StudioProjectRecord[];
   invoices: InvoiceRecord[];
+  visits: VisitRecord[];
+  registeredUsers: RegisteredUserRecord[];
   studioSettings: StudioSettings;
   loadingMessages: boolean;
+  loadingAnalytics?: boolean;
   onNavigateTab: (
-    tab: 'messages' | 'invoices' | 'bookings' | 'clients' | 'projects' | 'settings'
+    tab:
+      | 'messages'
+      | 'invoices'
+      | 'bookings'
+      | 'clients'
+      | 'projects'
+      | 'users'
+      | 'settings'
   ) => void;
   onOpenMessageModal: (msg: ContactMessageRecord) => void;
   onOpenNewProjectModal: () => void;
@@ -55,8 +77,11 @@ export const AdminDashboardHome: React.FC<AdminDashboardHomeProps> = ({
   messages,
   projects,
   invoices,
+  visits,
+  registeredUsers,
   studioSettings,
   loadingMessages,
+  loadingAnalytics = false,
   onNavigateTab,
   onOpenMessageModal,
   onOpenNewProjectModal,
@@ -70,6 +95,44 @@ export const AdminDashboardHome: React.FC<AdminDashboardHomeProps> = ({
   const weeklyTotal = weeklyBuckets.reduce((sum, d) => sum + d.count, 0);
   const topServices = getTopServicesBreakdown(messages);
   const latestFive = messages.slice(0, 5);
+
+  // Visitor & User Analytics
+  const analytics = getVisitorAnalytics(visits, registeredUsers);
+  const visitor7Days = getLast7DaysVisitorBuckets(visits);
+  const maxDailyVisitors = Math.max(1, ...visitor7Days.map((d) => d.count));
+  const userGrowth7Days = getLast7DaysUserGrowthBuckets(registeredUsers);
+  const maxGrowthVal = Math.max(
+    1,
+    ...userGrowth7Days.map((b) => b.cumulativeTotal)
+  );
+  const latestVisitors = visits.slice(0, 6);
+  const latestRegisteredUsers = registeredUsers.slice(0, 6);
+
+  // Build SVG polyline points for Registered Users Growth chart
+  const svgW = 320;
+  const svgH = 128;
+  const padX = 14;
+  const padY = 14;
+  const plotW = svgW - padX * 2;
+  const plotH = svgH - padY * 2;
+  const growthPoints = userGrowth7Days.map((bucket, idx) => {
+    const x =
+      userGrowth7Days.length <= 1
+        ? svgW / 2
+        : padX + (idx / (userGrowth7Days.length - 1)) * plotW;
+    const y =
+      padY + plotH - (bucket.cumulativeTotal / maxGrowthVal) * plotH;
+    return { x, y, bucket };
+  });
+  const linePathD = growthPoints
+    .map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`)
+    .join(' ');
+  const areaPathD =
+    growthPoints.length > 0
+      ? `${linePathD} L ${growthPoints[growthPoints.length - 1].x.toFixed(1)} ${(
+          svgH - padY
+        ).toFixed(1)} L ${growthPoints[0].x.toFixed(1)} ${(svgH - padY).toFixed(1)} Z`
+      : '';
 
   const todayFormatted = new Date().toLocaleDateString('en-GH', {
     weekday: 'long',
@@ -141,6 +204,389 @@ export const AdminDashboardHome: React.FC<AdminDashboardHomeProps> = ({
           </button>
         </div>
       </motion.div>
+
+      {/* WEBSITE ANALYTICS (Real-Time Firestore Visits & Registered Users) */}
+      <section aria-labelledby="website-analytics-heading" className="space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-mono-tabular uppercase tracking-[0.2em] text-[#D4AF37]">
+              Real-Time Traffic &amp; Auth Funnel
+            </p>
+            <h2
+              id="website-analytics-heading"
+              className="font-luxury text-xl sm:text-2xl font-bold text-white mt-0.5 flex items-center gap-2"
+            >
+              <span>Website Analytics</span>
+              <Globe className="w-4 h-4 text-[#D4AF37]" />
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => onNavigateTab('users')}
+            className="text-xs font-semibold text-[#FFD700] hover:underline cursor-pointer"
+          >
+            All Registered Users ({analytics.registeredUsersCount}) →
+          </button>
+        </div>
+
+        {/* 5 Analytics Stat Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="luxury-card rounded-3xl p-5">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-medium text-neutral-400">
+                Total Visitors (All Time)
+              </span>
+              <span className="w-9 h-9 rounded-2xl bg-[#D4AF37]/12 border border-[#D4AF37]/30 flex items-center justify-center text-[#FFD700]">
+                <Eye className="w-4 h-4" />
+              </span>
+            </div>
+            <p className="font-sora font-mono-tabular text-3xl font-bold gold-gradient-text">
+              {loadingAnalytics ? '—' : analytics.totalVisitors}
+            </p>
+            <p className="text-[11px] text-neutral-400 mt-1.5">
+              Unique daily visits recorded
+            </p>
+          </div>
+
+          <div className="luxury-card rounded-3xl p-5">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-medium text-neutral-400">
+                Visitors Today
+              </span>
+              <span className="w-9 h-9 rounded-2xl bg-sky-500/15 border border-sky-500/35 flex items-center justify-center text-sky-300">
+                <Activity className="w-4 h-4" />
+              </span>
+            </div>
+            <p className="font-sora font-mono-tabular text-3xl font-bold text-white">
+              {loadingAnalytics ? '—' : analytics.visitorsToday}
+            </p>
+            <p className="text-[11px] text-neutral-400 mt-1.5">
+              Deduplicated by device &amp; IP
+            </p>
+          </div>
+
+          <div className="luxury-card rounded-3xl p-5">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-medium text-neutral-400">
+                Visitors This Week
+              </span>
+              <span className="w-9 h-9 rounded-2xl bg-[#D4AF37]/12 border border-[#D4AF37]/30 flex items-center justify-center text-[#FFD700]">
+                <Globe className="w-4 h-4" />
+              </span>
+            </div>
+            <p className="font-sora font-mono-tabular text-3xl font-bold text-white">
+              {loadingAnalytics ? '—' : analytics.visitorsThisWeek}
+            </p>
+            <p className="text-[11px] text-neutral-400 mt-1.5">
+              Rolling last 7 days
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => onNavigateTab('users')}
+            className="luxury-card luxury-card-hover rounded-3xl p-5 text-left cursor-pointer"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-medium text-neutral-400">
+                Registered Users
+              </span>
+              <span className="w-9 h-9 rounded-2xl bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center text-emerald-300">
+                <UserCheck className="w-4 h-4" />
+              </span>
+            </div>
+            <p className="font-sora font-mono-tabular text-3xl font-bold text-emerald-300">
+              {loadingAnalytics ? '—' : analytics.registeredUsersCount}
+            </p>
+            <p className="text-[11px] text-neutral-400 mt-1.5">
+              Total Google logins
+            </p>
+          </button>
+
+          <div className="luxury-card rounded-3xl p-5">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-medium text-neutral-400">
+                Conversion Rate
+              </span>
+              <span className="w-9 h-9 rounded-2xl bg-[#D4AF37]/15 border border-[#D4AF37]/35 flex items-center justify-center text-[#FFD700]">
+                <TrendingUp className="w-4 h-4" />
+              </span>
+            </div>
+            <p className="font-sora font-mono-tabular text-3xl font-bold gold-gradient-text">
+              {loadingAnalytics ? '—' : `${analytics.conversionRatePct}%`}
+            </p>
+            <p className="text-[11px] text-neutral-400 mt-1.5">
+              {analytics.conversionRatePct}% of visitors login
+            </p>
+          </div>
+        </div>
+
+        {/* Analytics Charts Row: Chart 1 (Gold Bar Chart) + Chart 2 (SVG Line Chart) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-6 luxury-card rounded-3xl p-6 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-[11px] font-mono-tabular uppercase tracking-[0.2em] text-[#D4AF37]">
+                  Chart 1 · Daily Reach
+                </p>
+                <h3 className="font-luxury text-lg sm:text-xl font-bold text-white mt-0.5">
+                  Visitors Per Day (Last 7 Days)
+                </h3>
+              </div>
+              <span className="font-mono-tabular text-sm font-bold gold-gradient-text">
+                {analytics.visitorsThisWeek} visits
+              </span>
+            </div>
+
+            <div className="grid grid-cols-7 gap-2.5 items-end h-40 pt-4 pb-2 border-b border-white/10">
+              {visitor7Days.map((bucket) => {
+                const heightPct =
+                  bucket.count === 0
+                    ? 8
+                    : Math.max(18, Math.round((bucket.count / maxDailyVisitors) * 100));
+                return (
+                  <div
+                    key={bucket.dateKey}
+                    className="h-full flex flex-col items-center justify-end gap-1.5"
+                  >
+                    <span className="font-mono-tabular text-[11px] font-semibold text-[#FFD700]">
+                      {bucket.count}
+                    </span>
+                    <div className="w-full max-w-[38px] h-28 flex items-end justify-center rounded-xl bg-white/[0.03] p-1">
+                      <motion.div
+                        initial={{ height: 0 }}
+                        animate={{ height: `${heightPct}%` }}
+                        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                        className={`w-full rounded-lg ${
+                          bucket.count > 0 ? 'luxury-bar-gold' : 'bg-white/10'
+                        }`}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="grid grid-cols-7 gap-2.5 pt-2.5 text-center">
+              {visitor7Days.map((bucket) => (
+                <span
+                  key={bucket.dateKey}
+                  className={`text-[11px] font-medium ${
+                    bucket.isToday ? 'text-[#FFD700] font-bold' : 'text-neutral-400'
+                  }`}
+                >
+                  {bucket.label}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="lg:col-span-6 luxury-card rounded-3xl p-6 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-[11px] font-mono-tabular uppercase tracking-[0.2em] text-[#D4AF37]">
+                  Chart 2 · Account Signups
+                </p>
+                <h3 className="font-luxury text-lg sm:text-xl font-bold text-white mt-0.5">
+                  Registered Users Growth
+                </h3>
+              </div>
+              <span className="font-mono-tabular text-sm font-bold text-emerald-300">
+                {analytics.registeredUsersCount} total
+              </span>
+            </div>
+
+            <div className="w-full h-40 pt-2">
+              <svg
+                viewBox={`0 0 ${svgW} ${svgH}`}
+                className="w-full h-full overflow-visible"
+                role="img"
+                aria-label="Registered users cumulative growth over the last 7 days"
+              >
+                <defs>
+                  <linearGradient id="userGrowthFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#FFD700" stopOpacity="0.32" />
+                    <stop offset="100%" stopColor="#D4AF37" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <line
+                  x1={padX}
+                  y1={svgH - padY}
+                  x2={svgW - padX}
+                  y2={svgH - padY}
+                  stroke="rgba(255,255,255,0.1)"
+                  strokeWidth="1"
+                />
+                {areaPathD && <path d={areaPathD} fill="url(#userGrowthFill)" />}
+                {linePathD && (
+                  <path
+                    d={linePathD}
+                    fill="none"
+                    stroke="#FFD700"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                )}
+                {growthPoints.map((pt) => (
+                  <g key={pt.bucket.dateKey}>
+                    <circle
+                      cx={pt.x}
+                      cy={pt.y}
+                      r="4"
+                      fill="#0A0A0A"
+                      stroke="#FFD700"
+                      strokeWidth="2"
+                    />
+                    <text
+                      x={pt.x}
+                      y={pt.y - 9}
+                      textAnchor="middle"
+                      fill="#FFD700"
+                      fontSize="10"
+                      fontFamily="monospace"
+                    >
+                      {pt.bucket.cumulativeTotal}
+                    </text>
+                  </g>
+                ))}
+              </svg>
+            </div>
+
+            <div className="grid grid-cols-7 gap-2.5 pt-2.5 text-center border-t border-white/10">
+              {userGrowth7Days.map((bucket) => (
+                <span key={bucket.dateKey} className="text-[11px] text-neutral-400">
+                  {bucket.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Analytics Tables Row: Table 1 (Latest Visitors) + Table 2 (Latest Registered Users) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-6 luxury-card rounded-3xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-[11px] font-mono-tabular uppercase tracking-[0.2em] text-[#D4AF37]">
+                  Table 1 · Public Traffic
+                </p>
+                <h3 className="font-luxury text-lg font-bold text-white mt-0.5">
+                  Latest Visitors
+                </h3>
+              </div>
+              <span className="font-mono-tabular text-xs text-neutral-400">
+                {visits.length} total
+              </span>
+            </div>
+
+            {latestVisitors.length === 0 ? (
+              <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-6 text-center text-xs text-neutral-400">
+                No public visits tracked yet. Public visits appear here automatically (admin visits excluded).
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-white/10 text-neutral-400">
+                      <th className="pb-2.5 font-medium">Time</th>
+                      <th className="pb-2.5 font-medium">Page</th>
+                      <th className="pb-2.5 font-medium">Device</th>
+                      <th className="pb-2.5 font-medium text-right">Country</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.06]">
+                    {latestVisitors.map((v) => (
+                      <tr key={v.id} className="text-neutral-200">
+                        <td className="py-2.5 font-mono-tabular whitespace-nowrap">
+                          {v.dateKey} · {v.timeLabel}
+                        </td>
+                        <td className="py-2.5 font-medium text-[#FFD700]">
+                          {v.pageVisited}
+                        </td>
+                        <td className="py-2.5">
+                          <span className="inline-flex items-center gap-1">
+                            {v.device === 'Mobile' ? (
+                              <Smartphone className="w-3.5 h-3.5 text-sky-300" />
+                            ) : (
+                              <Monitor className="w-3.5 h-3.5 text-[#D4AF37]" />
+                            )}
+                            <span>{v.device}</span>
+                          </span>
+                        </td>
+                        <td className="py-2.5 text-right text-neutral-400">
+                          {v.country || 'Unknown'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="lg:col-span-6 luxury-card rounded-3xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-[11px] font-mono-tabular uppercase tracking-[0.2em] text-[#D4AF37]">
+                  Table 2 · Google Logins
+                </p>
+                <h3 className="font-luxury text-lg font-bold text-white mt-0.5">
+                  Latest Registered Users
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigateTab('users')}
+                className="text-xs font-semibold text-[#FFD700] hover:underline cursor-pointer"
+              >
+                View all →
+              </button>
+            </div>
+
+            {latestRegisteredUsers.length === 0 ? (
+              <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-6 text-center text-xs text-neutral-400">
+                No registered users yet. Clients who continue with Google appear here immediately.
+              </div>
+            ) : (
+              <div className="divide-y divide-white/[0.06]">
+                {latestRegisteredUsers.map((u) => (
+                  <div
+                    key={u.uid}
+                    className="py-2.5 flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      {u.photoUrl ? (
+                        <img
+                          src={u.photoUrl}
+                          alt={u.name}
+                          referrerPolicy="no-referrer"
+                          className="w-9 h-9 rounded-full object-cover border border-[#D4AF37]/45 shrink-0"
+                        />
+                      ) : (
+                        <span className="w-9 h-9 rounded-full bg-gradient-to-br from-[#FFD700] to-[#B8860B] text-[#0A0A0A] font-bold text-xs flex items-center justify-center shrink-0">
+                          {getInitial(u.name)}
+                        </span>
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-white truncate">
+                          {u.name}
+                        </p>
+                        <p className="text-[11px] text-neutral-400 truncate">
+                          {u.email}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-mono-tabular text-neutral-400 shrink-0">
+                      {formatFullDateTime(u.firstLoginAt)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
 
       {/* Primary KPI Grid (Total Revenue + Pending Payments + Leads + Clients) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">

@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { User } from 'firebase/auth';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import {
   AlertCircle,
@@ -6,21 +7,28 @@ import {
   CheckCircle2,
   Clock,
   Loader2,
+  Lock,
   MessageCircle,
   PhoneCall,
 } from 'lucide-react';
 import { db } from '../firebase';
 import {
   buildWhatsAppUrl,
+  LoginGateReason,
+  RegisteredUserRecord,
   SERVICE_OPTIONS,
   VALIDATION_LIMITS,
   WebsiteCmsData,
 } from '../types';
+import { incrementUserTotalRequests } from '../utils/visitorTracker';
 import { Reveal } from './Reveal';
 
 interface BookCallSectionProps {
   cms: WebsiteCmsData;
   workingHours: string;
+  authUser: User | null;
+  userProfile: RegisteredUserRecord | null;
+  onRequireLogin: (reason: LoginGateReason) => void;
 }
 
 const CALL_TIME_SLOTS = [
@@ -43,6 +51,9 @@ function getTodayIso(): string {
 export const BookCallSection: React.FC<BookCallSectionProps> = ({
   cms,
   workingHours,
+  authUser,
+  userProfile,
+  onRequireLogin,
 }) => {
   const serviceOptions = useMemo(() => {
     const visibleCmsServices = cms.services
@@ -69,9 +80,25 @@ export const BookCallSection: React.FC<BookCallSectionProps> = ({
     service: string;
   } | null>(null);
 
+  const isLoggedIn = Boolean(authUser && authUser.emailVerified);
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      const nextName = userProfile?.name || authUser?.displayName || '';
+      const nextPhone = userProfile?.phone || '';
+      setClientName((prev) => prev || nextName);
+      setClientPhone((prev) => prev || nextPhone);
+    }
+  }, [isLoggedIn, userProfile?.name, userProfile?.phone, authUser?.displayName]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+
+    if (!authUser || !authUser.emailVerified) {
+      onRequireLogin('book-call');
+      return;
+    }
 
     const cleanName = clientName.trim();
     const cleanPhone = clientPhone.trim();
@@ -99,6 +126,7 @@ export const BookCallSection: React.FC<BookCallSectionProps> = ({
     setSubmitting(true);
     try {
       await addDoc(collection(db, 'aizertech_bookings'), {
+        userId: authUser.uid,
         clientName: boundedName,
         clientPhone: boundedPhone,
         preferredDate: preferredDate.slice(0, 20),
@@ -109,6 +137,8 @@ export const BookCallSection: React.FC<BookCallSectionProps> = ({
         updatedAt: serverTimestamp(),
       });
 
+      await incrementUserTotalRequests(authUser.uid);
+
       setBookedSummary({
         name: boundedName,
         phone: boundedPhone,
@@ -116,8 +146,6 @@ export const BookCallSection: React.FC<BookCallSectionProps> = ({
         time: preferredTime,
         service: selectedService,
       });
-      setClientName('');
-      setClientPhone('');
     } catch (err) {
       setErrorMsg(
         err instanceof Error
@@ -186,6 +214,23 @@ export const BookCallSection: React.FC<BookCallSectionProps> = ({
                 noValidate
                 className="ios-glass rounded-[24px] p-5 sm:p-8 space-y-5"
               >
+                {!isLoggedIn && (
+                  <div className="rounded-2xl ios-glass-gold p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-2.5 text-xs text-ink">
+                      <Lock className="w-4 h-4 text-accent shrink-0 mt-0.5" />
+                      <p>
+                        <strong className="text-accent">Google Login Required:</strong> Sign in once to book a free discovery call and track your call confirmation inside My Account.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onRequireLogin('book-call')}
+                      className="haptic-tap-sm px-4 py-2 rounded-xl bg-accent-btn text-accent-ink text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer"
+                    >
+                      Continue with Google
+                    </button>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label

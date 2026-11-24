@@ -53,6 +53,239 @@ service cloud.firestore {
       ];
     }
 
+    function isValidUserProfile(data) {
+      return data.keys().hasAll([
+          'uid',
+          'name',
+          'email',
+          'photoUrl',
+          'phone',
+          'phonePrompted',
+          'firstLoginAt',
+          'lastActiveAt',
+          'totalRequests'
+        ]) &&
+        data.keys().hasOnly([
+          'uid',
+          'name',
+          'email',
+          'photoUrl',
+          'phone',
+          'phonePrompted',
+          'firstLoginAt',
+          'lastActiveAt',
+          'totalRequests'
+        ]) &&
+        data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        isValidEmail(data.email) &&
+        data.photoUrl is string && data.photoUrl.size() <= 1000 &&
+        data.phone is string && data.phone.size() <= 30 &&
+        data.phonePrompted is bool &&
+        data.firstLoginAt is timestamp &&
+        data.lastActiveAt is timestamp &&
+        data.totalRequests is number && data.totalRequests >= 0 && data.totalRequests <= 100000;
+    }
+
+    match /aizertech_users/{userId} {
+      allow get: if isValidId(userId) && (isAdmin() || (isVerified() && request.auth.uid == userId));
+      allow list: if isAdmin();
+      allow create: if isValidId(userId) &&
+        isVerified() &&
+        request.auth.uid == userId &&
+        isValidUserProfile(incoming()) &&
+        incoming().uid == userId &&
+        incoming().email == request.auth.token.email &&
+        incoming().totalRequests == 0 &&
+        incoming().firstLoginAt == request.time &&
+        incoming().lastActiveAt == request.time;
+      allow update: if isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().firstLoginAt == existing().firstLoginAt && (
+          (
+            isAdmin() &&
+            incoming().lastActiveAt == request.time
+          ) || (
+            isVerified() &&
+            request.auth.uid == userId &&
+            incoming().email == existing().email &&
+            incoming().lastActiveAt == request.time &&
+            incoming().totalRequests >= existing().totalRequests &&
+            incoming().totalRequests <= existing().totalRequests + 1 &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'name',
+              'photoUrl',
+              'phone',
+              'phonePrompted',
+              'lastActiveAt',
+              'totalRequests'
+            ])
+          )
+        );
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    function isValidVisit(data) {
+      return data.keys().hasAll([
+          'dateKey',
+          'timeLabel',
+          'pageVisited',
+          'device',
+          'country',
+          'visitorKey',
+          'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'dateKey',
+          'timeLabel',
+          'pageVisited',
+          'device',
+          'country',
+          'visitorKey',
+          'createdAt'
+        ]) &&
+        data.dateKey is string && data.dateKey.size() == 10 && data.dateKey.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
+        data.timeLabel is string && data.timeLabel.size() >= 2 && data.timeLabel.size() <= 20 &&
+        data.pageVisited is string && data.pageVisited.size() >= 2 && data.pageVisited.size() <= 60 &&
+        data.device is string && data.device in ['Mobile', 'Desktop'] &&
+        data.country is string && data.country.size() <= 80 &&
+        data.visitorKey is string && data.visitorKey.size() >= 4 && data.visitorKey.size() <= 80 &&
+        data.createdAt is timestamp;
+    }
+
+    match /aizertech_visits/{visitId} {
+      allow get: if isValidId(visitId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(visitId) &&
+        isValidVisit(incoming()) &&
+        incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(visitId) && isAdmin();
+    }
+
+    function isValidChatThread(data) {
+      return data.keys().hasAll([
+          'userId',
+          'userName',
+          'userEmail',
+          'userPhoto',
+          'userPhone',
+          'lastMessage',
+          'lastSenderRole',
+          'unreadByAdmin',
+          'unreadByClient',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'userId',
+          'userName',
+          'userEmail',
+          'userPhoto',
+          'userPhone',
+          'lastMessage',
+          'lastSenderRole',
+          'unreadByAdmin',
+          'unreadByClient',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 120 &&
+        isValidEmail(data.userEmail) &&
+        data.userPhoto is string && data.userPhoto.size() <= 1000 &&
+        data.userPhone is string && data.userPhone.size() <= 30 &&
+        data.lastMessage is string && data.lastMessage.size() <= 500 &&
+        data.lastSenderRole is string && data.lastSenderRole in ['client', 'admin'] &&
+        data.unreadByAdmin is number && data.unreadByAdmin >= 0 && data.unreadByAdmin <= 1000 &&
+        data.unreadByClient is number && data.unreadByClient >= 0 && data.unreadByClient <= 1000 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidChatMessage(data) {
+      return data.keys().hasAll([
+          'senderId',
+          'senderName',
+          'senderRole',
+          'text',
+          'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'senderId',
+          'senderName',
+          'senderRole',
+          'text',
+          'createdAt'
+        ]) &&
+        data.senderId is string && data.senderId.size() >= 1 && data.senderId.size() <= 128 &&
+        data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 120 &&
+        data.senderRole is string && data.senderRole in ['client', 'admin'] &&
+        data.text is string && data.text.size() >= 1 && data.text.size() <= 2000 &&
+        data.createdAt is timestamp;
+    }
+
+    match /aizertech_chats/{chatUserId} {
+      allow get: if isValidId(chatUserId) && (isAdmin() || (isVerified() && request.auth.uid == chatUserId));
+      allow list: if isAdmin();
+      allow create: if isValidId(chatUserId) &&
+        isVerified() &&
+        (isAdmin() || request.auth.uid == chatUserId) &&
+        isValidChatThread(incoming()) &&
+        incoming().userId == chatUserId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(chatUserId) &&
+        isVerified() &&
+        isValidChatThread(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isAdmin() || (
+            request.auth.uid == chatUserId && (
+              (
+                incoming().lastSenderRole == 'client' &&
+                incoming().diff(existing()).affectedKeys().hasOnly([
+                  'userName',
+                  'userEmail',
+                  'userPhoto',
+                  'userPhone',
+                  'lastMessage',
+                  'lastSenderRole',
+                  'unreadByAdmin',
+                  'unreadByClient',
+                  'updatedAt'
+                ])
+              ) || (
+                incoming().unreadByClient == 0 &&
+                incoming().diff(existing()).affectedKeys().hasOnly([
+                  'unreadByClient',
+                  'updatedAt'
+                ])
+              )
+            )
+          )
+        );
+      allow delete: if isValidId(chatUserId) && isAdmin();
+
+      match /messages/{chatMsgId} {
+        allow get: if isValidId(chatUserId) && isValidId(chatMsgId) && (isAdmin() || (isVerified() && request.auth.uid == chatUserId));
+        allow list: if isValidId(chatUserId) && (isAdmin() || (isVerified() && request.auth.uid == chatUserId));
+        allow create: if isValidId(chatUserId) &&
+          isValidId(chatMsgId) &&
+          isVerified() &&
+          (isAdmin() || request.auth.uid == chatUserId) &&
+          isValidChatMessage(incoming()) &&
+          incoming().senderId == request.auth.uid &&
+          (isAdmin() || incoming().senderRole == 'client') &&
+          get(/databases/$(database)/documents/aizertech_chats/$(chatUserId)).data.userId == chatUserId &&
+          incoming().createdAt == request.time;
+        allow update: if false;
+        allow delete: if isValidId(chatUserId) && isValidId(chatMsgId) && isAdmin();
+      }
+    }
+
     function isValidContactMessage(data) {
       return data.keys().hasAll([
           'senderName',
@@ -66,6 +299,7 @@ service cloud.firestore {
           'updatedAt'
         ]) &&
         data.keys().hasOnly([
+          'userId',
           'senderName',
           'senderEmail',
           'senderPhone',
@@ -77,6 +311,7 @@ service cloud.firestore {
           'createdAt',
           'updatedAt'
         ]) &&
+        (!('userId' in data) || (data.userId is string && data.userId.size() <= 128)) &&
         data.senderName is string && data.senderName.size() >= 2 && data.senderName.size() <= 100 &&
         isValidEmail(data.senderEmail) &&
         data.senderPhone is string && data.senderPhone.size() <= 30 &&
@@ -90,10 +325,13 @@ service cloud.firestore {
     }
 
     match /contactMessages/{messageId} {
-      allow get: if isValidId(messageId) && isAdmin();
-      allow list: if isAdmin();
+      allow get: if isValidId(messageId) && (isAdmin() || (isVerified() && ('userId' in existing()) && existing().userId == request.auth.uid));
+      allow list: if isAdmin() || (isVerified() && resource.data.userId == request.auth.uid);
       allow create: if isValidId(messageId) &&
+        isVerified() &&
         isValidContactMessage(incoming()) &&
+        ('userId' in incoming()) &&
+        incoming().userId == request.auth.uid &&
         incoming().status == 'new' &&
         !('adminNote' in incoming()) &&
         incoming().createdAt == request.time &&
@@ -126,6 +364,7 @@ service cloud.firestore {
           'updatedAt'
         ]) &&
         data.keys().hasOnly([
+          'userId',
           'name',
           'email',
           'phone',
@@ -137,6 +376,7 @@ service cloud.firestore {
           'createdAt',
           'updatedAt'
         ]) &&
+        (!('userId' in data) || (data.userId is string && data.userId.size() <= 128)) &&
         data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
         isValidEmail(data.email) &&
         data.phone is string && data.phone.size() <= 30 &&
@@ -150,18 +390,21 @@ service cloud.firestore {
     }
 
     match /aizertech_messages/{messageId} {
-      allow get: if isValidId(messageId) && isAdmin();
-      allow list: if isAdmin();
+      allow get: if isValidId(messageId) && (isAdmin() || (isVerified() && ('userId' in existing()) && existing().userId == request.auth.uid));
+      allow list: if isAdmin() || (isVerified() && resource.data.userId == request.auth.uid);
       allow create: if isValidId(messageId) &&
+        isVerified() &&
         isValidAizerTechMessage(incoming()) &&
+        ('userId' in incoming()) &&
+        incoming().userId == request.auth.uid &&
         incoming().status == 'new' &&
         !('adminNote' in incoming()) &&
         incoming().createdAt == request.time &&
         incoming().updatedAt == request.time;
       allow update: if isValidId(messageId) &&
         isAdmin() &&
-        isValidMessageStatus(incoming().status) &&
-        (!('adminNote' in incoming()) || (incoming().adminNote is string && incoming().adminNote.size() <= 1500)) &&
+        isValidAizerTechMessage(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time &&
         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'adminNote', 'updatedAt']);
       allow delete: if isValidId(messageId) && isAdmin();
@@ -211,8 +454,8 @@ service cloud.firestore {
     }
 
     match /aizertech_invoices/{invoiceId} {
-      allow get: if isValidId(invoiceId) && isAdmin();
-      allow list: if isAdmin();
+      allow get: if isValidId(invoiceId) && (isAdmin() || (isVerified() && existing().clientEmail == request.auth.token.email));
+      allow list: if isAdmin() || (isVerified() && resource.data.clientEmail == request.auth.token.email);
       allow create: if isValidId(invoiceId) &&
         isAdmin() &&
         isValidInvoice(incoming()) &&
@@ -238,6 +481,7 @@ service cloud.firestore {
           'updatedAt'
         ]) &&
         data.keys().hasOnly([
+          'userId',
           'clientName',
           'clientPhone',
           'preferredDate',
@@ -247,6 +491,7 @@ service cloud.firestore {
           'createdAt',
           'updatedAt'
         ]) &&
+        (!('userId' in data) || (data.userId is string && data.userId.size() <= 128)) &&
         data.clientName is string && data.clientName.size() >= 2 && data.clientName.size() <= 100 &&
         data.clientPhone is string && data.clientPhone.size() >= 7 && data.clientPhone.size() <= 30 &&
         data.preferredDate is string && data.preferredDate.size() >= 6 && data.preferredDate.size() <= 20 &&
@@ -258,10 +503,13 @@ service cloud.firestore {
     }
 
     match /aizertech_bookings/{bookingId} {
-      allow get: if isValidId(bookingId) && isAdmin();
-      allow list: if isAdmin();
+      allow get: if isValidId(bookingId) && (isAdmin() || (isVerified() && ('userId' in existing()) && existing().userId == request.auth.uid));
+      allow list: if isAdmin() || (isVerified() && resource.data.userId == request.auth.uid);
       allow create: if isValidId(bookingId) &&
+        isVerified() &&
         isValidBooking(incoming()) &&
+        ('userId' in incoming()) &&
+        incoming().userId == request.auth.uid &&
         incoming().status == 'pending' &&
         incoming().createdAt == request.time &&
         incoming().updatedAt == request.time;

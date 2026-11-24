@@ -1,24 +1,25 @@
 # Firestore Security Specification
 
 ## 1. Data Invariants
-1. Every document under `/contactMessages/{messageId}`, `/aizertech_messages/{messageId}`, `/aizertech_invoices/{invoiceId}`, `/aizertech_bookings/{bookingId}`, and `/aizertech_testimonials/{testimonialId}` must have a valid alphanumeric/dash/underscore ID (`<= 128` chars).
-2. Client inquiries (`/contactMessages` & `/aizertech_messages`) can be created by visitors only with `status == 'new'`, validated fields/lengths, and server timestamps (`createdAt == request.time`, `updatedAt == request.time`). Only verified studio admins may `get`, `list`, `update` (`status` pipeline stage, optional private `adminNote`, `updatedAt`), or `delete`.
-3. `/aizertech_invoices/{invoiceId}` is strictly private to verified studio admins (`get`, `list`, `create`, `update`, `delete`) with validated GHS amount (`0..10,000,000`), invoice number, status (`'unpaid'` or `'paid'`), and immutable `createdAt`.
-4. `/aizertech_bookings/{bookingId}` accepts public `create` strictly with `status == 'pending'`, validated date/time/service/phone fields, and server timestamps; PII reads (`get`, `list`), `update` (`status` & `updatedAt`), and `delete` are restricted exclusively to verified studio admins.
-5. `/aizertech_testimonials/{testimonialId}` allows public `get`/`list` strictly when `approved == true` (admin can read all); `create`, `update`, `delete` are strictly admin-only with rating bounds (`1..5`) and text size limits.
-6. Website Control CMS Safety: `/aizertech_draft/website` and `/aizertech_backup/{backupId}` are admin-only; `/aizertech_live/website` is public `get`-only and admin-writable.
-7. `/studioSettings/public` is publicly `get`-readable and admin-writable with validated schema including MoMo details, auto-reply message, and working hours.
+1. Every document across all collections must have a valid alphanumeric/dash/underscore ID (`<= 128` chars).
+2. **Strict Must-Login Enforcement**: Zero guest requests, zero guest bookings, zero guest chats. Creating documents in `/aizertech_messages`, `/contactMessages`, `/aizertech_bookings`, or `/aizertech_chats/{userId}/messages` requires `request.auth != null && request.auth.token.email_verified == true` and `userId == request.auth.uid` (or `senderId == request.auth.uid`).
+3. **`/aizertech_users/{userId}`**: PII-isolated user registry. Only the owning user (`request.auth.uid == userId && email_verified`) or verified admin may `get` or `create`/`update`; only verified admin may `list`. `uid`, `email`, and `firstLoginAt` are immutable once created, and `totalRequests` may only increment by `<= 1` per update by the owner.
+4. **`/aizertech_visits/{visitId}`**: Write-once visitor analytics log (`allow create` for public website traffic; `allow update: if false;`), strictly readable (`get`, `list`) and deletable only by verified admin.
+5. **`/aizertech_chats/{chatUserId}` & `/messages/{chatMsgId}`**: Master Gate enforced so clients may read/write only their own thread (`request.auth.uid == chatUserId`) and messages cannot be spoofed with `senderRole: 'admin'` by non-admins.
+6. **`/aizertech_invoices/{invoiceId}`**: Writable/deletable strictly by verified admin (`amountGhs >= 0`, `status in ['unpaid', 'paid']`); readable (`get`, `list`) by verified admin OR the owning client whose verified `request.auth.token.email` matches `clientEmail`.
+7. **`/aizertech_testimonials/{testimonialId}`**: Public `get`/`list` strictly when `approved == true`; admin-only CRUD.
+8. **`/aizertech_draft/website`, `/aizertech_backup/{backupId}`, `/studioProjects/{projectId}`**: Strictly admin-only.
 
 ## 2. Adversarial Payloads ("Dirty Dozen+")
-1. Unauthenticated `list` on `/contactMessages`, `/aizertech_messages`, `/aizertech_invoices`, or `/aizertech_bookings` -> `PERMISSION_DENIED`
-2. Unauthenticated `list` on `/aizertech_testimonials` without filtering for `approved == true` (attempting to read hidden testimonials) -> `PERMISSION_DENIED`
-3. Unauthenticated `create` on `/aizertech_bookings` with pre-confirmed `status: 'confirmed'` -> `PERMISSION_DENIED`
-4. Unauthenticated `create` on `/aizertech_invoices` -> `PERMISSION_DENIED`
-5. Unauthenticated `create` or `update` on `/aizertech_testimonials` -> `PERMISSION_DENIED`
-6. Authenticated non-admin `get` on `/aizertech_invoices/{id}` or `/aizertech_draft/website` -> `PERMISSION_DENIED`
-7. Unverified email claiming admin (`email_verified: false`) writing to `/aizertech_invoices` -> `PERMISSION_DENIED`
-8. Inquiry or booking create with shadow field `isAdmin: true` -> `PERMISSION_DENIED`
-9. Admin update attempting to mutate `createdAt` or `clientName` on `/aizertech_bookings/{id}` -> `PERMISSION_DENIED`
-10. Admin write on `/aizertech_invoices/{id}` with negative `amountGhs: -500` -> `PERMISSION_DENIED`
-11. Admin update attempting to alter `/aizertech_backup/{id}` (append-only backup integrity) -> `PERMISSION_DENIED`
-12. Booking create with forged `createdAt` not equal to `request.time` -> `PERMISSION_DENIED`
+1. Unauthenticated guest `create` on `/aizertech_messages` or `/aizertech_bookings` -> `PERMISSION_DENIED`
+2. Unauthenticated `create` on `/aizertech_chats/{uid}/messages` -> `PERMISSION_DENIED`
+3. Authenticated user `get` or `list` on `/aizertech_users` belonging to another user -> `PERMISSION_DENIED`
+4. Authenticated user `create` on `/aizertech_users/{otherUid}` (UID spoofing) -> `PERMISSION_DENIED`
+5. Authenticated user `update` on `/aizertech_users/{uid}` forging `totalRequests: 9999` or mutating `firstLoginAt` -> `PERMISSION_DENIED`
+6. Unauthenticated `list` or `get` on `/aizertech_visits` -> `PERMISSION_DENIED`
+7. Visitor `update` on `/aizertech_visits/{id}` trying to alter an existing daily visit -> `PERMISSION_DENIED`
+8. Non-admin `create` in `/aizertech_chats/{uid}/messages` with `senderRole: 'admin'` -> `PERMISSION_DENIED`
+9. Authenticated client `list` on `/aizertech_invoices` without matching `clientEmail == request.auth.token.email` -> `PERMISSION_DENIED`
+10. Authenticated non-admin `create` on `/aizertech_messages` with `userId` set to another user's UID or `status: 'paid'` -> `PERMISSION_DENIED`
+11. Unverified email claiming admin (`email_verified: false`) writing to `/aizertech_invoices` -> `PERMISSION_DENIED`
+12. Visitor `create` on `/aizertech_visits` with shadow field `isAdmin: true` or forged `createdAt` -> `PERMISSION_DENIED`

@@ -30,6 +30,7 @@ import {
   RefreshCw,
   Settings,
   Star,
+  UserCheck,
   Users,
   X,
 } from 'lucide-react';
@@ -54,15 +55,18 @@ import {
   ADMIN_EMAIL,
   BookingRecord,
   BookingStatus,
+  ChatThreadRecord,
   ContactMessageRecord,
   InvoiceRecord,
   InvoiceStatus,
   isAllowedAdminEmail,
   MessageStatus,
   normalizeWebsiteCms,
+  RegisteredUserRecord,
   StudioProjectRecord,
   StudioSettings,
   TestimonialRecord,
+  VisitRecord,
   WebsiteBackupRecord,
   WebsiteCmsData,
 } from '../types';
@@ -73,6 +77,7 @@ import { AdminInvoicesView, InvoiceDraftSeed } from './admin/AdminInvoicesView';
 import { AdminLoginCard } from './admin/AdminLoginCard';
 import { AdminMessagesView } from './admin/AdminMessagesView';
 import { AdminProjectsView } from './admin/AdminProjectsView';
+import { AdminRegisteredUsersView } from './admin/AdminRegisteredUsersView';
 import { AdminSettingsView } from './admin/AdminSettingsView';
 import { AdminTestimonialsView } from './admin/AdminTestimonialsView';
 import { AdminWebsiteControlView } from './admin/AdminWebsiteControlView';
@@ -99,6 +104,7 @@ type AdminSection =
   | 'bookings'
   | 'testimonials'
   | 'website'
+  | 'users'
   | 'clients'
   | 'projects'
   | 'settings';
@@ -161,6 +167,13 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
   const [testimonials, setTestimonials] = useState<TestimonialRecord[]>([]);
   const [loadingTestimonials, setLoadingTestimonials] = useState(false);
 
+  // Real-time Registered Users, Visits Analytics & Live Chats
+  const [registeredUsers, setRegisteredUsers] = useState<RegisteredUserRecord[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [visits, setVisits] = useState<VisitRecord[]>([]);
+  const [loadingVisits, setLoadingVisits] = useState(false);
+  const [chatThreads, setChatThreads] = useState<ChatThreadRecord[]>([]);
+
   // Cross-view controls & modals
   const [messageSearchSeed, setMessageSearchSeed] = useState('');
   const [invoiceSeedDraft, setInvoiceSeedDraft] = useState<InvoiceDraftSeed | null>(null);
@@ -208,6 +221,9 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
       setInvoices([]);
       setBookings([]);
       setTestimonials([]);
+      setRegisteredUsers([]);
+      setVisits([]);
+      setChatThreads([]);
       return;
     }
 
@@ -217,6 +233,8 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
     setLoadingInvoices(true);
     setLoadingBookings(true);
     setLoadingTestimonials(true);
+    setLoadingUsers(true);
+    setLoadingVisits(true);
 
     const aizerQuery = query(
       collection(db, 'aizertech_messages'),
@@ -461,6 +479,95 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
       }
     );
 
+    const usersQuery = query(
+      collection(db, 'aizertech_users'),
+      orderBy('firstLoginAt', 'desc')
+    );
+    const unsubUsers = onSnapshot(
+      usersQuery,
+      (snap) => {
+        const rows: RegisteredUserRecord[] = snap.docs.map((docSnap) => {
+          const d = docSnap.data();
+          return {
+            uid: String(d.uid || docSnap.id),
+            name: String(d.name || 'Client'),
+            email: String(d.email || ''),
+            photoUrl: String(d.photoUrl || ''),
+            phone: String(d.phone || ''),
+            phonePrompted: Boolean(d.phonePrompted),
+            firstLoginAt: d.firstLoginAt || null,
+            lastActiveAt: d.lastActiveAt || null,
+            totalRequests: Number(d.totalRequests) || 0,
+          };
+        });
+        setRegisteredUsers(rows);
+        setLoadingUsers(false);
+      },
+      (error) => {
+        setLoadingUsers(false);
+        handleFirestoreError(error, OperationType.LIST, 'aizertech_users');
+      }
+    );
+
+    const visitsQuery = query(
+      collection(db, 'aizertech_visits'),
+      orderBy('createdAt', 'desc')
+    );
+    const unsubVisits = onSnapshot(
+      visitsQuery,
+      (snap) => {
+        const rows: VisitRecord[] = snap.docs.map((docSnap) => {
+          const d = docSnap.data();
+          return {
+            id: docSnap.id,
+            dateKey: String(d.dateKey || ''),
+            timeLabel: String(d.timeLabel || ''),
+            pageVisited: String(d.pageVisited || 'Home'),
+            device: d.device === 'Mobile' ? 'Mobile' : 'Desktop',
+            country: String(d.country || 'Unknown'),
+            visitorKey: String(d.visitorKey || ''),
+            createdAt: d.createdAt || null,
+          };
+        });
+        setVisits(rows);
+        setLoadingVisits(false);
+      },
+      (error) => {
+        setLoadingVisits(false);
+        handleFirestoreError(error, OperationType.LIST, 'aizertech_visits');
+      }
+    );
+
+    const chatsQuery = query(
+      collection(db, 'aizertech_chats'),
+      orderBy('updatedAt', 'desc')
+    );
+    const unsubChats = onSnapshot(
+      chatsQuery,
+      (snap) => {
+        const rows: ChatThreadRecord[] = snap.docs.map((docSnap) => {
+          const d = docSnap.data();
+          return {
+            userId: String(d.userId || docSnap.id),
+            userName: String(d.userName || 'Client'),
+            userEmail: String(d.userEmail || ''),
+            userPhoto: String(d.userPhoto || ''),
+            userPhone: String(d.userPhone || ''),
+            lastMessage: String(d.lastMessage || ''),
+            lastSenderRole: d.lastSenderRole === 'admin' ? 'admin' : 'client',
+            unreadByAdmin: Number(d.unreadByAdmin) || 0,
+            unreadByClient: Number(d.unreadByClient) || 0,
+            createdAt: d.createdAt || null,
+            updatedAt: d.updatedAt || null,
+          };
+        });
+        setChatThreads(rows);
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'aizertech_chats');
+      }
+    );
+
     return () => {
       unsubAizer();
       unsubLegacy();
@@ -471,6 +578,9 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
       unsubDraft();
       unsubLiveCheck();
       unsubBackups();
+      unsubUsers();
+      unsubVisits();
+      unsubChats();
     };
   }, [open, authReady, isAuthorizedAdmin]);
 
@@ -480,9 +590,15 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
     );
   }, [aizerMessages, legacyMessages]);
 
+  const unreadLiveChatCount = useMemo(
+    () => chatThreads.reduce((sum, t) => sum + (t.unreadByAdmin || 0), 0),
+    [chatThreads]
+  );
+
   const unreadCount = useMemo(
-    () => allMessages.filter((m) => m.status === 'new').length,
-    [allMessages]
+    () =>
+      allMessages.filter((m) => m.status === 'new').length + unreadLiveChatCount,
+    [allMessages, unreadLiveChatCount]
   );
 
   const unpaidInvoicesCount = useMemo(
@@ -635,6 +751,62 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
     }
   };
 
+  const handleSendAdminChatReply = async (
+    thread: ChatThreadRecord,
+    text: string
+  ) => {
+    if (!user) return;
+    const clean = text.trim().slice(0, 2000);
+    if (!clean) return;
+    try {
+      await updateDoc(doc(db, 'aizertech_chats', thread.userId), {
+        userName: thread.userName,
+        userEmail: thread.userEmail,
+        userPhoto: thread.userPhoto,
+        userPhone: thread.userPhone,
+        lastMessage: clean.slice(0, 500),
+        lastSenderRole: 'admin',
+        unreadByAdmin: 0,
+        unreadByClient: Math.min(999, (thread.unreadByClient || 0) + 1),
+        updatedAt: serverTimestamp(),
+      });
+
+      await addDoc(collection(db, 'aizertech_chats', thread.userId, 'messages'), {
+        senderId: user.uid,
+        senderName: 'Sablaizer (CEO)',
+        senderRole: 'admin',
+        text: clean,
+        createdAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(
+        error,
+        OperationType.WRITE,
+        `aizertech_chats/${thread.userId}/messages`
+      );
+    }
+  };
+
+  const handleMarkChatReadByAdmin = async (userId: string) => {
+    const thread = chatThreads.find((t) => t.userId === userId);
+    if (!thread) return;
+    try {
+      await updateDoc(doc(db, 'aizertech_chats', userId), {
+        userName: thread.userName,
+        userEmail: thread.userEmail,
+        userPhoto: thread.userPhoto,
+        userPhone: thread.userPhone,
+        lastMessage: thread.lastMessage,
+        lastSenderRole: thread.lastSenderRole,
+        unreadByAdmin: 0,
+        unreadByClient: thread.unreadByClient || 0,
+        updatedAt: serverTimestamp(),
+      });
+    } catch {
+      // Ignore transient mark-read failures
+    }
+  };
+
   const handleCreateInvoice = async (payload: {
     invoiceNumber: string;
     clientName: string;
@@ -650,6 +822,7 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
     try {
       await addDoc(collection(db, 'aizertech_invoices'), {
         ...payload,
+        clientEmail: payload.clientEmail.trim().toLowerCase(),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -1204,6 +1377,7 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
   }[] = [
     { id: 'dashboard', label: 'Dashboard', shortLabel: 'Home', icon: LayoutDashboard },
     { id: 'messages', label: 'Messages', shortLabel: 'Inbox', icon: MessageSquare, badge: unreadCount },
+    { id: 'users', label: 'Registered Users', shortLabel: 'Users', icon: UserCheck },
     { id: 'invoices', label: 'Invoices', shortLabel: 'Invoices', icon: Receipt, badge: unpaidInvoicesCount },
     { id: 'bookings', label: 'Bookings', shortLabel: 'Calls', icon: Calendar, badge: pendingBookingsCount },
     { id: 'testimonials', label: 'Testimonials', shortLabel: 'Reviews', icon: Star },
@@ -1363,8 +1537,11 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
               messages={allMessages}
               projects={projects}
               invoices={invoices}
+              visits={visits}
+              registeredUsers={registeredUsers}
               studioSettings={studioSettings}
               loadingMessages={loadingMessages}
+              loadingAnalytics={loadingVisits || loadingUsers}
               onNavigateTab={(tab) => setActiveSection(tab)}
               onOpenMessageModal={(msg) => {
                 setSelectedModalMessage(msg);
@@ -1378,6 +1555,7 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
           {activeSection === 'messages' && (
             <AdminMessagesView
               messages={allMessages}
+              chatThreads={chatThreads}
               loadingMessages={loadingMessages}
               studioSettings={studioSettings}
               initialSearch={messageSearchSeed}
@@ -1391,8 +1569,21 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
                 setActiveSection('invoices');
               }}
               onDeleteMessage={handleDeleteMessage}
+              onSendAdminChatReply={handleSendAdminChatReply}
+              onMarkChatReadByAdmin={handleMarkChatReadByAdmin}
               hasGmailToken={hasGmailToken}
               onSendGmail={handleSendGmail}
+            />
+          )}
+
+          {activeSection === 'users' && (
+            <AdminRegisteredUsersView
+              users={registeredUsers}
+              loadingUsers={loadingUsers}
+              onFilterMessagesByUser={(queryText) => {
+                setMessageSearchSeed(queryText);
+                setActiveSection('messages');
+              }}
             />
           )}
 

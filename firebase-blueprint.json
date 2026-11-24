@@ -1,26 +1,80 @@
 {
   "entities": {
-    "ContactMessage": {
-      "title": "ContactMessage",
-      "description": "A prospective client inquiry submitted through the Aizer Tech portfolio contact form.",
+    "AizerTechUser": {
+      "title": "AizerTechUser",
+      "description": "Registered Google-authenticated user saved in aizertech_users.",
       "type": "object",
       "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "email": { "type": "string", "format": "email", "minLength": 5, "maxLength": 150 },
+        "photoUrl": { "type": "string", "minLength": 0, "maxLength": 1000 },
+        "phone": { "type": "string", "minLength": 0, "maxLength": 30 },
+        "phonePrompted": { "type": "boolean" },
+        "firstLoginAt": { "type": "string", "format": "date-time" },
+        "lastActiveAt": { "type": "string", "format": "date-time" },
+        "totalRequests": { "type": "number", "minimum": 0, "maximum": 100000 }
+      },
+      "required": ["uid", "name", "email", "photoUrl", "phone", "phonePrompted", "firstLoginAt", "lastActiveAt", "totalRequests"]
+    },
+    "AizerTechVisit": {
+      "title": "AizerTechVisit",
+      "description": "Unique daily website visit recorded in aizertech_visits (admin visits excluded).",
+      "type": "object",
+      "properties": {
+        "dateKey": { "type": "string", "minLength": 10, "maxLength": 10, "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "timeLabel": { "type": "string", "minLength": 2, "maxLength": 20 },
+        "pageVisited": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "device": { "type": "string", "enum": ["Mobile", "Desktop"] },
+        "country": { "type": "string", "minLength": 0, "maxLength": 80 },
+        "visitorKey": { "type": "string", "minLength": 4, "maxLength": 80 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["dateKey", "timeLabel", "pageVisited", "device", "country", "visitorKey", "createdAt"]
+    },
+    "AizerTechChatThread": {
+      "title": "AizerTechChatThread",
+      "description": "Real-time live chat thread metadata between an authenticated client and AizerTech.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "userName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "userEmail": { "type": "string", "format": "email", "minLength": 5, "maxLength": 150 },
+        "userPhoto": { "type": "string", "minLength": 0, "maxLength": 1000 },
+        "userPhone": { "type": "string", "minLength": 0, "maxLength": 30 },
+        "lastMessage": { "type": "string", "minLength": 0, "maxLength": 500 },
+        "lastSenderRole": { "type": "string", "enum": ["client", "admin"] },
+        "unreadByAdmin": { "type": "number", "minimum": 0, "maximum": 1000 },
+        "unreadByClient": { "type": "number", "minimum": 0, "maximum": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "userName", "userEmail", "userPhoto", "userPhone", "lastMessage", "lastSenderRole", "unreadByAdmin", "unreadByClient", "createdAt", "updatedAt"]
+    },
+    "AizerTechChatMessage": {
+      "title": "AizerTechChatMessage",
+      "description": "Individual live chat message inside /aizertech_chats/{userId}/messages.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "senderName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "senderRole": { "type": "string", "enum": ["client", "admin"] },
+        "text": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderId", "senderName", "senderRole", "text", "createdAt"]
+    },
+    "ContactMessage": {
+      "title": "ContactMessage",
+      "description": "Legacy contact inquiry record.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128 },
         "senderName": { "type": "string", "minLength": 2, "maxLength": 100 },
         "senderEmail": { "type": "string", "format": "email", "minLength": 5, "maxLength": 150 },
         "senderPhone": { "type": "string", "minLength": 0, "maxLength": 30 },
-        "serviceType": {
-          "type": "string",
-          "enum": [
-            "Business Website (from GHS 800)",
-            "Mobile App (from GHS 2,500)",
-            "Food App / Custom Platform",
-            "Consulting & UI/UX"
-          ]
-        },
-        "budgetTier": {
-          "type": "string",
-          "enum": ["GHS 800 - 1,500", "GHS 1,500 - 2,500", "GHS 2,500 - 5,000", "GHS 5,000+"]
-        },
+        "serviceType": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "budgetTier": { "type": "string", "minLength": 1, "maxLength": 60 },
         "message": { "type": "string", "minLength": 10, "maxLength": 2000 },
         "status": {
           "type": "string",
@@ -34,9 +88,10 @@
     },
     "AizerTechMessage": {
       "title": "AizerTechMessage",
-      "description": "A prospective client inquiry stored in the aizertech_messages collection.",
+      "description": "Authenticated client project inquiry stored in aizertech_messages.",
       "type": "object",
       "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128 },
         "name": { "type": "string", "minLength": 2, "maxLength": 100 },
         "email": { "type": "string", "format": "email", "minLength": 5, "maxLength": 150 },
         "phone": { "type": "string", "minLength": 0, "maxLength": 30 },
@@ -75,9 +130,10 @@
     },
     "AizerTechBooking": {
       "title": "AizerTechBooking",
-      "description": "Free consultation call booking submitted on the public website.",
+      "description": "Free consultation call booking submitted by Google-authenticated users.",
       "type": "object",
       "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128 },
         "clientName": { "type": "string", "minLength": 2, "maxLength": 100 },
         "clientPhone": { "type": "string", "minLength": 7, "maxLength": 30 },
         "preferredDate": { "type": "string", "minLength": 6, "maxLength": 20 },
@@ -180,10 +236,14 @@
     }
   },
   "firestore": {
+    "/aizertech_users/{userId}": { "schema": { "$ref": "#/entities/AizerTechUser" }, "description": "Registered Google-authenticated client accounts." },
+    "/aizertech_visits/{visitId}": { "schema": { "$ref": "#/entities/AizerTechVisit" }, "description": "Unique daily visitor analytics records." },
+    "/aizertech_chats/{chatUserId}": { "schema": { "$ref": "#/entities/AizerTechChatThread" }, "description": "Real-time live chat threads between clients and AizerTech." },
+    "/aizertech_chats/{chatUserId}/messages/{chatMsgId}": { "schema": { "$ref": "#/entities/AizerTechChatMessage" }, "description": "Immutable live chat messages inside a user thread." },
     "/contactMessages/{messageId}": { "schema": { "$ref": "#/entities/ContactMessage" }, "description": "Legacy contact inquiries." },
-    "/aizertech_messages/{messageId}": { "schema": { "$ref": "#/entities/AizerTechMessage" }, "description": "Primary AizerTech GH inquiries with pipeline stages & private CEO notes." },
-    "/aizertech_invoices/{invoiceId}": { "schema": { "$ref": "#/entities/AizerTechInvoice" }, "description": "Private CEO invoice ledger for MTN MoMo / Telecel Cash billing." },
-    "/aizertech_bookings/{bookingId}": { "schema": { "$ref": "#/entities/AizerTechBooking" }, "description": "Free call consultation bookings submitted by visitors." },
+    "/aizertech_messages/{messageId}": { "schema": { "$ref": "#/entities/AizerTechMessage" }, "description": "Authenticated AizerTech GH inquiries with pipeline stages & private CEO notes." },
+    "/aizertech_invoices/{invoiceId}": { "schema": { "$ref": "#/entities/AizerTechInvoice" }, "description": "Client invoices readable by owning client email and managed by CEO." },
+    "/aizertech_bookings/{bookingId}": { "schema": { "$ref": "#/entities/AizerTechBooking" }, "description": "Authenticated free call consultation bookings." },
     "/aizertech_testimonials/{testimonialId}": { "schema": { "$ref": "#/entities/AizerTechTestimonial" }, "description": "Client testimonials; approved items read live by visitors." },
     "/studioProjects/{projectId}": { "schema": { "$ref": "#/entities/StudioProject" }, "description": "Private CEO studio project ledger." },
     "/aizertech_live/{docId}": { "schema": { "$ref": "#/entities/WebsiteCmsDocument" }, "description": "Live public website CMS document." },

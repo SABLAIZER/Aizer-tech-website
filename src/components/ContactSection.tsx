@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { User } from 'firebase/auth';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import {
   AlertCircle,
   CheckCircle2,
   Clock,
   Loader2,
+  Lock,
   MapPin,
   MessageCircle,
   Send,
@@ -15,13 +17,15 @@ import {
   BudgetTier,
   buildWhatsAppUrl,
   formatAutoReplyTemplate,
-  formatWhatsAppDisplay,
+  LoginGateReason,
+  RegisteredUserRecord,
   SERVICE_OPTIONS,
   ServiceType,
   StudioSettings,
   VALIDATION_LIMITS,
   WebsiteCmsData,
 } from '../types';
+import { incrementUserTotalRequests } from '../utils/visitorTracker';
 import { Reveal } from './Reveal';
 
 interface ContactSectionProps {
@@ -29,8 +33,12 @@ interface ContactSectionProps {
   studioSettings: StudioSettings;
   selectedService: ServiceType;
   selectedBudget: BudgetTier;
+  authUser: User | null;
+  userProfile: RegisteredUserRecord | null;
   onChangeService: (service: ServiceType) => void;
   onChangeBudget: (budget: BudgetTier) => void;
+  onRequireLogin: (reason: LoginGateReason) => void;
+  onOpenMyAccount: (tab?: 'chat' | 'requests' | 'invoices') => void;
 }
 
 export const ContactSection: React.FC<ContactSectionProps> = ({
@@ -38,8 +46,12 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
   studioSettings,
   selectedService,
   selectedBudget,
+  authUser,
+  userProfile,
   onChangeService,
   onChangeBudget,
+  onRequireLogin,
+  onOpenMyAccount,
 }) => {
   const [senderName, setSenderName] = useState('');
   const [senderEmail, setSenderEmail] = useState('');
@@ -53,9 +65,34 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
     submittedService?: string;
   }>({ type: 'idle', text: '' });
 
+  const isLoggedIn = Boolean(authUser && authUser.emailVerified);
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      const nextName = userProfile?.name || authUser?.displayName || '';
+      const nextEmail = userProfile?.email || authUser?.email || '';
+      const nextPhone = userProfile?.phone || '';
+      setSenderName((prev) => prev || nextName);
+      if (nextEmail) setSenderEmail(nextEmail);
+      setSenderPhone((prev) => prev || nextPhone);
+    }
+  }, [
+    isLoggedIn,
+    userProfile?.name,
+    userProfile?.email,
+    userProfile?.phone,
+    authUser?.displayName,
+    authUser?.email,
+  ]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitState({ type: 'idle', text: '' });
+
+    if (!authUser || !authUser.emailVerified) {
+      onRequireLogin('request');
+      return;
+    }
 
     const cleanName = senderName.trim();
     const cleanEmail = senderEmail.trim();
@@ -105,6 +142,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
     setSubmitting(true);
     try {
       await addDoc(collection(db, 'aizertech_messages'), {
+        userId: authUser.uid,
         name: boundedName,
         email: boundedEmail,
         phone: boundedPhone,
@@ -116,15 +154,14 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
         updatedAt: serverTimestamp(),
       });
 
+      await incrementUserTotalRequests(authUser.uid);
+
       const autoReplyDraft = formatAutoReplyTemplate(
         studioSettings.autoReplyMessage,
         boundedName,
         selectedService
       );
 
-      setSenderName('');
-      setSenderEmail('');
-      setSenderPhone('');
       setMessage('');
       setSubmitState({
         type: 'success',
@@ -188,18 +225,20 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                 </div>
 
                 <div className="pt-2 flex flex-wrap items-center gap-3">
-                  <a
-                    href={buildWhatsAppUrl(
-                      `Hello Aizer Tech, I would like a quote for ${selectedService} (${selectedBudget}).`,
-                      cms.hero.whatsappNumber
-                    )}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="haptic-tap ios-glass-subtle inline-flex items-center justify-center gap-2.5 px-5 py-3 rounded-xl text-sm font-medium text-ink hover:border-[#25D366]/60"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!isLoggedIn) {
+                        onRequireLogin('chat');
+                      } else {
+                        onOpenMyAccount('chat');
+                      }
+                    }}
+                    className="haptic-tap ios-glass-subtle inline-flex items-center justify-center gap-2.5 px-5 py-3 rounded-xl text-sm font-medium text-ink hover:border-[#25D366]/60 cursor-pointer"
                   >
                     <MessageCircle className="w-4 h-4 text-[#25D366] shrink-0" />
-                    <span>WhatsApp {formatWhatsAppDisplay(cms.hero.whatsappNumber)}</span>
-                  </a>
+                    <span>Chat With Us</span>
+                  </button>
                   <a
                     href={`mailto:${cms.hero.email}`}
                     className="text-xs font-mono-tabular text-ink-muted hover:text-accent transition-colors"
@@ -218,6 +257,23 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                 noValidate
                 className="ios-glass rounded-[24px] p-5 sm:p-8 space-y-5"
               >
+                {!isLoggedIn && (
+                  <div className="rounded-2xl ios-glass-gold p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-2.5 text-xs text-ink">
+                      <Lock className="w-4 h-4 text-accent shrink-0 mt-0.5" />
+                      <p>
+                        <strong className="text-accent">Google Login Required:</strong> Sign in with Google to submit a new request, start live chat, and view your invoices.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onRequireLogin('request')}
+                      className="haptic-tap-sm px-4 py-2 rounded-xl bg-accent-btn text-accent-ink text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer"
+                    >
+                      Continue with Google
+                    </button>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label
@@ -360,20 +416,30 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                       </div>
                     </div>
 
-                    {submitState.autoReplyDraft && (
-                      <a
-                        href={buildWhatsAppUrl(
-                          `Hello AizerTech GH, I just submitted an inquiry for ${submitState.submittedService || 'a project'}. Here is my confirmation note:\n\n${submitState.autoReplyDraft}`,
-                          cms.hero.whatsappNumber
-                        )}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="haptic-tap inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#25D366] text-[#070708] text-xs font-semibold hover:bg-[#2EE372]"
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => onOpenMyAccount('requests')}
+                        className="haptic-tap inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-accent-btn text-accent-ink text-xs font-semibold hover:bg-accent-hover cursor-pointer"
                       >
-                        <MessageCircle className="w-4 h-4" />
-                        <span>Open WhatsApp Reply Draft</span>
-                      </a>
-                    )}
+                        <span>Track in My Account</span>
+                      </button>
+
+                      {submitState.autoReplyDraft && (
+                        <a
+                          href={buildWhatsAppUrl(
+                            `Hello AizerTech GH, I just submitted an inquiry for ${submitState.submittedService || 'a project'}. Here is my confirmation note:\n\n${submitState.autoReplyDraft}`,
+                            cms.hero.whatsappNumber
+                          )}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="haptic-tap inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#25D366] text-[#070708] text-xs font-semibold hover:bg-[#2EE372]"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                          <span>Open WhatsApp Reply Draft</span>
+                        </a>
+                      )}
+                    </div>
                   </div>
                 )}
 

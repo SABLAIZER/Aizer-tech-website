@@ -79,6 +79,7 @@ export type MessageCollection = 'aizertech_messages' | 'contactMessages';
 
 export interface ContactMessageRecord {
   id: string;
+  userId?: string;
   sourceCollection: MessageCollection;
   senderName: string;
   senderEmail: string;
@@ -114,6 +115,7 @@ export type BookingStatus = 'pending' | 'confirmed' | 'done' | 'cancelled';
 
 export interface BookingRecord {
   id: string;
+  userId?: string;
   clientName: string;
   clientPhone: string;
   preferredDate: string;
@@ -135,6 +137,60 @@ export interface TestimonialRecord {
   createdAt?: { seconds: number; nanoseconds: number } | null;
   updatedAt?: { seconds: number; nanoseconds: number } | null;
 }
+
+export interface RegisteredUserRecord {
+  uid: string;
+  name: string;
+  email: string;
+  photoUrl: string;
+  phone: string;
+  phonePrompted: boolean;
+  firstLoginAt?: { seconds: number; nanoseconds: number } | null;
+  lastActiveAt?: { seconds: number; nanoseconds: number } | null;
+  totalRequests: number;
+}
+
+export interface VisitRecord {
+  id: string;
+  dateKey: string;
+  timeLabel: string;
+  pageVisited: string;
+  device: 'Mobile' | 'Desktop';
+  country: string;
+  visitorKey: string;
+  createdAt?: { seconds: number; nanoseconds: number } | null;
+}
+
+export interface ChatThreadRecord {
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userPhoto: string;
+  userPhone: string;
+  lastMessage: string;
+  lastSenderRole: 'client' | 'admin';
+  unreadByAdmin: number;
+  unreadByClient: number;
+  createdAt?: { seconds: number; nanoseconds: number } | null;
+  updatedAt?: { seconds: number; nanoseconds: number } | null;
+}
+
+export interface ChatMessageRecord {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderRole: 'client' | 'admin';
+  text: string;
+  createdAt?: { seconds: number; nanoseconds: number } | null;
+}
+
+export type LoginGateReason =
+  | 'chat'
+  | 'request'
+  | 'book-call'
+  | 'quote'
+  | 'my-account'
+  | 'login';
 
 export type StudioProjectStatus = 'in_progress' | 'done';
 

@@ -2,7 +2,6 @@ import React from 'react';
 import { ArrowUpRight, Clock, MessageCircle, Wallet } from 'lucide-react';
 import {
   BudgetTier,
-  buildWhatsAppUrl,
   CmsServiceItem,
   ServiceType,
   WebsiteCmsData,
@@ -13,6 +12,7 @@ interface ServicesSectionProps {
   cms: WebsiteCmsData;
   loading?: boolean;
   onSelectService: (service: ServiceType, budget: BudgetTier) => void;
+  onChatWithUs: () => void;
 }
 
 function mapServiceToBookingArgs(service: CmsServiceItem): {
@@ -48,6 +48,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({
   cms,
   loading = false,
   onSelectService,
+  onChatWithUs,
 }) => {
   const visibleServices = cms.services.filter((item) => item.visible);
 
@@ -167,18 +168,14 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({
                       <ArrowUpRight className="w-4 h-4 shrink-0" />
                     </button>
 
-                    <a
-                      href={buildWhatsAppUrl(
-                        `Hello Aizer Tech, I am interested in ${service.name} (${service.startingPrice}).`,
-                        cms.hero.whatsappNumber
-                      )}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="haptic-tap w-full sm:w-auto inline-flex items-center justify-center sm:justify-start gap-2 py-1.5 text-sm text-ink-muted hover:text-[#25D366] sm:whitespace-nowrap shrink-0"
+                    <button
+                      type="button"
+                      onClick={onChatWithUs}
+                      className="haptic-tap w-full sm:w-auto inline-flex items-center justify-center sm:justify-start gap-2 py-1.5 text-sm text-ink-muted hover:text-[#25D366] sm:whitespace-nowrap shrink-0 cursor-pointer"
                     >
                       <MessageCircle className="w-4 h-4 text-[#25D366] shrink-0" />
-                      <span>Ask on WhatsApp</span>
-                    </a>
+                      <span>Chat With Us</span>
+                    </button>
                   </div>
                 </article>
               </Reveal>
@@ -201,18 +198,14 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({
               </p>
             </div>
 
-            <a
-              href={buildWhatsAppUrl(
-                'Hello Aizer Tech, I am ready to pay the 50% deposit via MoMo to start my project. Please share your Mobile Money details.',
-                cms.hero.whatsappNumber
-              )}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="haptic-tap w-full md:w-auto inline-flex items-center justify-center gap-2.5 px-5 py-3.5 rounded-xl bg-accent-btn text-accent-ink text-sm font-semibold hover:bg-accent-hover shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] shrink-0 text-center"
+            <button
+              type="button"
+              onClick={onChatWithUs}
+              className="haptic-tap w-full md:w-auto inline-flex items-center justify-center gap-2.5 px-5 py-3.5 rounded-xl bg-accent-btn text-accent-ink text-sm font-semibold hover:bg-accent-hover shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] shrink-0 text-center cursor-pointer"
             >
               <Wallet className="w-4 h-4 shrink-0" />
               <span>Pay 50% Deposit via MoMo</span>
-            </a>
+            </button>
           </div>
         </Reveal>
       </div>
