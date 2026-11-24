@@ -27,11 +27,11 @@ export const Footer: React.FC<FooterProps> = ({
     cms.services.find((s) => s.name.toLowerCase().includes('app')) ||
     cms.services[1];
 
-  const cleanWebRate = (webService?.startingPrice || 'From GHS 800').replace(
+  const cleanWebRate = (webService?.startingPrice || 'From GHS 600').replace(
     /^From\s+/i,
     ''
   );
-  const cleanMobileRate = (appService?.startingPrice || 'From GHS 2,500').replace(
+  const cleanMobileRate = (appService?.startingPrice || 'From GHS 1,500').replace(
     /^From\s+/i,
     ''
   );

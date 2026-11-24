@@ -62,7 +62,7 @@ const FLAGSHIP_FOOD_PROJECT: PortfolioProject = {
   id: 'chopbox-accra',
   title: 'ChopBox Accra — Food Ordering & Delivery App',
   category: 'Mobile App & Kitchen Dispatch',
-  tierLabel: 'Mobile App Tier · From GHS 2,500',
+  tierLabel: 'Mobile App Tier · From GHS 1,500',
   location: 'Osu & East Legon, Accra',
   summary:
     'A full-stack food ordering and dispatch ecosystem built for multi-branch restaurants in Accra, replacing high marketplace commissions with direct Mobile Money checkout and live rider tracking.',

@@ -187,7 +187,7 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
   const [projClientName, setProjClientName] = useState('');
   const [projClientPhone, setProjClientPhone] = useState('');
   const [projService, setProjService] = useState('Business Website');
-  const [projAmount, setProjAmount] = useState('800');
+  const [projAmount, setProjAmount] = useState('600');
   const [projStatus, setProjStatus] = useState<'in_progress' | 'done'>('in_progress');
   const [projNotes, setProjNotes] = useState('');
   const [creatingProject, setCreatingProject] = useState(false);
@@ -1031,7 +1031,7 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
       setProjTitle('');
       setProjClientName('');
       setProjClientPhone('');
-      setProjAmount('800');
+      setProjAmount('600');
       setProjStatus('in_progress');
       setProjNotes('');
       setNewProjectModalOpen(false);

@@ -1,11 +1,11 @@
 export type ServiceType =
-  | 'Business Website (from GHS 800)'
-  | 'Mobile App (from GHS 2,500)'
+  | 'Business Website (from GHS 600)'
+  | 'Mobile App (from GHS 1,500)'
   | 'Food App / Custom Platform'
   | 'Consulting & UI/UX';
 
 export type BudgetTier =
-  | 'GHS 800 - 1,500'
+  | 'GHS 600 - 1,500'
   | 'GHS 1,500 - 2,500'
   | 'GHS 2,500 - 5,000'
   | 'GHS 5,000+';
@@ -344,14 +344,14 @@ export function formatAutoReplyTemplate(
 }
 
 export const SERVICE_OPTIONS: ServiceType[] = [
-  'Business Website (from GHS 800)',
-  'Mobile App (from GHS 2,500)',
+  'Business Website (from GHS 600)',
+  'Mobile App (from GHS 1,500)',
   'Food App / Custom Platform',
   'Consulting & UI/UX',
 ];
 
 export const BUDGET_OPTIONS: BudgetTier[] = [
-  'GHS 800 - 1,500',
+  'GHS 600 - 1,500',
   'GHS 1,500 - 2,500',
   'GHS 2,500 - 5,000',
   'GHS 5,000+',
@@ -377,10 +377,10 @@ export interface StudioSettings {
 export const DEFAULT_STUDIO_SETTINGS: StudioSettings = {
   heroHeadline: 'Luxury digital products engineered for modern businesses.',
   heroSubheadline:
-    'Aizer Tech crafts high-converting business websites starting from GHS 800 and bespoke iOS & Android mobile apps starting from GHS 2,500—built in Accra for discerning local and international brands.',
+    'Aizer Tech crafts high-converting business websites starting from GHS 600 and bespoke iOS & Android mobile apps starting from GHS 1,500—built in Accra for discerning local and international brands.',
   announcementBanner: '',
-  websiteStartingPrice: 'From GHS 800',
-  mobileStartingPrice: 'From GHS 2,500',
+  websiteStartingPrice: 'From GHS 600',
+  mobileStartingPrice: 'From GHS 1,500',
   brandingStartingPrice: 'Project Based',
   whatsappNumber: WHATSAPP_NUMBER,
   contactEmail: ADMIN_EMAIL,
@@ -399,7 +399,7 @@ export const DEFAULT_CMS_SERVICES: CmsServiceItem[] = [
     name: 'App Development',
     description:
       'Fluid, native-grade iOS & Android mobile applications engineered for everyday devices across Ghana, complete with MTN MoMo & Telecel Cash checkout.',
-    startingPrice: 'From GHS 2,500',
+    startingPrice: 'From GHS 1,500',
     deliveryTime: '3 – 6 Weeks',
     visible: true,
     featured: true,
@@ -415,7 +415,7 @@ export const DEFAULT_CMS_SERVICES: CmsServiceItem[] = [
     name: 'Website Development',
     description:
       'Bespoke company websites, flagship landing pages, and digital storefronts built to establish immediate trust and convert Accra & global visitors into paying clients.',
-    startingPrice: 'From GHS 800',
+    startingPrice: 'From GHS 600',
     deliveryTime: '7 Days',
     visible: true,
     featured: true,

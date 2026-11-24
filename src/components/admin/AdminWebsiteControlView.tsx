@@ -191,7 +191,7 @@ export const AdminWebsiteControlView: React.FC<AdminWebsiteControlViewProps> = (
     setEditingProjectId(null);
     setPTitle('');
     setPCategory('App');
-    setPPrice('GHS 2,500');
+    setPPrice('GHS 1,500');
     setPDescription('');
     setPImageUrl('');
     setPClientName('');
@@ -691,7 +691,7 @@ export const AdminWebsiteControlView: React.FC<AdminWebsiteControlViewProps> = (
                           e.target.value
                         )
                       }
-                      placeholder="From GHS 800"
+                      placeholder="From GHS 600"
                       className="w-full rounded-2xl bg-[#121215] border border-white/12 px-4 py-2.5 text-sm font-mono-tabular text-[#FFD700] focus:outline-none focus:border-[#D4AF37]"
                     />
                   </div>
@@ -1073,7 +1073,7 @@ export const AdminWebsiteControlView: React.FC<AdminWebsiteControlViewProps> = (
                   type="text"
                   value={pPrice}
                   onChange={(e) => setPPrice(e.target.value)}
-                  placeholder="GHS 2,500"
+                  placeholder="GHS 1,500"
                   className="w-full rounded-2xl bg-[#0A0A0A] border border-white/12 px-4 py-2.5 text-sm font-mono-tabular text-[#FFD700] focus:outline-none focus:border-[#D4AF37]"
                 />
               </div>

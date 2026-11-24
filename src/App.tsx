@@ -42,7 +42,7 @@ import {
 } from './utils/visitorTracker';
 
 const THEME_STORAGE_KEY = 'aizer-theme';
-const LIVE_CMS_CACHE_KEY = 'aizer_live_website_cache_v1';
+const LIVE_CMS_CACHE_KEY = 'aizer_live_website_cache_v2';
 
 function getInitialTheme(): ThemeMode {
   try {
@@ -112,10 +112,10 @@ export default function App() {
   const initialCache = getCachedLiveCms();
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const [selectedService, setSelectedService] = useState<ServiceType>(
-    'Business Website (from GHS 800)'
+    'Business Website (from GHS 600)'
   );
   const [selectedBudget, setSelectedBudget] =
-    useState<BudgetTier>('GHS 800 - 1,500');
+    useState<BudgetTier>('GHS 600 - 1,500');
   const [inboxOpen, setInboxOpen] = useState<boolean>(isAdminUrlRequested);
   const [portalOpen, setPortalOpen] = useState<boolean>(false);
   const [portalInitialTab, setPortalInitialTab] = useState<
@@ -523,7 +523,7 @@ export default function App() {
   };
 
   const handleBuildFoodApp = () => {
-    handleGatedQuote('Food App / Custom Platform', 'GHS 2,500 - 5,000');
+    handleGatedQuote('Food App / Custom Platform', 'GHS 1,500 - 2,500');
   };
 
   const handleSaveFirstLoginPhone = async (phone: string) => {

@@ -434,7 +434,7 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
               maxLength={STUDIO_SETTINGS_LIMITS.MAX_PRICE_LABEL}
               value={draft.websiteStartingPrice}
               onChange={(e) => updateField('websiteStartingPrice', e.target.value)}
-              placeholder="From GHS 800"
+              placeholder="From GHS 600"
               className="w-full rounded-2xl bg-[#0A0A0A] border border-white/12 px-4 py-3 text-sm font-mono-tabular text-white focus:outline-none focus:border-[#D4AF37]"
             />
           </div>
@@ -452,7 +452,7 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
               maxLength={STUDIO_SETTINGS_LIMITS.MAX_PRICE_LABEL}
               value={draft.mobileStartingPrice}
               onChange={(e) => updateField('mobileStartingPrice', e.target.value)}
-              placeholder="From GHS 2,500"
+              placeholder="From GHS 1,500"
               className="w-full rounded-2xl bg-[#0A0A0A] border border-white/12 px-4 py-3 text-sm font-mono-tabular text-white focus:outline-none focus:border-[#D4AF37]"
             />
           </div>

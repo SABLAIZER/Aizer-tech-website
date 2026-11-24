@@ -28,8 +28,8 @@ export const Hero: React.FC<HeroProps> = ({
   const appService =
     services.find((s) => s.name.toLowerCase().includes('app')) || services[1];
 
-  const webRateLabel = webService?.startingPrice || 'From GHS 800';
-  const mobileRateLabel = appService?.startingPrice || 'From GHS 2,500';
+  const webRateLabel = webService?.startingPrice || 'From GHS 600';
+  const mobileRateLabel = appService?.startingPrice || 'From GHS 1,500';
   const cleanWebRate = webRateLabel.replace(/^From\s+/i, '');
   const cleanMobileRate = mobileRateLabel.replace(/^From\s+/i, '');
   const whatsappDisplay = formatWhatsAppDisplay(hero.whatsappNumber);

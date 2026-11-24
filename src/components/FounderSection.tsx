@@ -103,11 +103,11 @@ export const FounderSection: React.FC<FounderSectionProps> = ({
               <p className="text-sm sm:text-base text-ink-secondary leading-relaxed mb-6">
                 Every website (
                 <span className="text-ink font-mono-tabular font-semibold whitespace-nowrap">
-                  {webService?.startingPrice || 'From GHS 800'}
+                  {webService?.startingPrice || 'From GHS 600'}
                 </span>
                 ) and mobile application (
                 <span className="text-ink font-mono-tabular font-semibold whitespace-nowrap">
-                  {appService?.startingPrice || 'From GHS 2,500'}
+                  {appService?.startingPrice || 'From GHS 1,500'}
                 </span>
                 ) is engineered with direct founder accountability from kickoff to launch.
               </p>

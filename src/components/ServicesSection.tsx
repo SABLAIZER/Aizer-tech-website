@@ -22,8 +22,8 @@ function mapServiceToBookingArgs(service: CmsServiceItem): {
   const n = service.name.toLowerCase();
   if (n.includes('app') || n.includes('mobile')) {
     return {
-      serviceType: 'Mobile App (from GHS 2,500)',
-      defaultBudget: 'GHS 2,500 - 5,000',
+      serviceType: 'Mobile App (from GHS 1,500)',
+      defaultBudget: 'GHS 1,500 - 2,500',
     };
   }
   if (n.includes('e-commerce') || n.includes('ecommerce') || n.includes('food')) {
@@ -34,13 +34,13 @@ function mapServiceToBookingArgs(service: CmsServiceItem): {
   }
   if (n.includes('web') || n.includes('site')) {
     return {
-      serviceType: 'Business Website (from GHS 800)',
-      defaultBudget: 'GHS 800 - 1,500',
+      serviceType: 'Business Website (from GHS 600)',
+      defaultBudget: 'GHS 600 - 1,500',
     };
   }
   return {
     serviceType: 'Consulting & UI/UX',
-    defaultBudget: 'GHS 800 - 1,500',
+    defaultBudget: 'GHS 600 - 1,500',
   };
 }
 
