@@ -3,6 +3,7 @@ import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import {
   AlertCircle,
   CheckCircle2,
+  Clock,
   Loader2,
   MapPin,
   MessageCircle,
@@ -13,9 +14,11 @@ import {
   BUDGET_OPTIONS,
   BudgetTier,
   buildWhatsAppUrl,
+  formatAutoReplyTemplate,
   formatWhatsAppDisplay,
   SERVICE_OPTIONS,
   ServiceType,
+  StudioSettings,
   VALIDATION_LIMITS,
   WebsiteCmsData,
 } from '../types';
@@ -23,6 +26,7 @@ import { Reveal } from './Reveal';
 
 interface ContactSectionProps {
   cms: WebsiteCmsData;
+  studioSettings: StudioSettings;
   selectedService: ServiceType;
   selectedBudget: BudgetTier;
   onChangeService: (service: ServiceType) => void;
@@ -31,6 +35,7 @@ interface ContactSectionProps {
 
 export const ContactSection: React.FC<ContactSectionProps> = ({
   cms,
+  studioSettings,
   selectedService,
   selectedBudget,
   onChangeService,
@@ -44,6 +49,8 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
   const [submitState, setSubmitState] = useState<{
     type: 'idle' | 'success' | 'error';
     text: string;
+    autoReplyDraft?: string;
+    submittedService?: string;
   }>({ type: 'idle', text: '' });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -109,13 +116,21 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
         updatedAt: serverTimestamp(),
       });
 
+      const autoReplyDraft = formatAutoReplyTemplate(
+        studioSettings.autoReplyMessage,
+        boundedName,
+        selectedService
+      );
+
       setSenderName('');
       setSenderEmail('');
       setSenderPhone('');
       setMessage('');
       setSubmitState({
         type: 'success',
-        text: 'Thank you! Your brief has been saved and Sablaizer will respond shortly.',
+        text: 'Thanks! AizerTech will reply in 30 mins',
+        autoReplyDraft,
+        submittedService: selectedService,
       });
     } catch (error) {
       const msg =
@@ -144,7 +159,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                 Request a quote or send your project brief.
               </h2>
               <p className="text-sm sm:text-base text-ink-secondary leading-relaxed mb-8">
-                Every inquiry goes straight to Sablaizer&apos;s private Aizer Tech inbox in Accra. Most project quotes are returned within the same business day.
+                Every inquiry goes straight to Sablaizer&apos;s private Aizer Tech inbox in Accra. Most project quotes are returned within 30 minutes during studio hours.
               </p>
 
               <div className="space-y-4 pt-6 border-t border-hairline">
@@ -156,6 +171,18 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                     </p>
                     <p className="text-xs text-ink-muted mt-0.5">
                       Led by Evans Kwaku Sablah (Sablaizer) · Local &amp; International Clients
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <Clock className="w-5 h-5 text-accent shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-ink">
+                      Working Hours
+                    </p>
+                    <p className="text-xs text-ink-muted mt-0.5">
+                      {studioSettings.workingHours}
                     </p>
                   </div>
                 </div>
@@ -319,10 +346,34 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                 {submitState.type === 'success' && (
                   <div
                     role="status"
-                    className="rounded-xl bg-emerald-500/10 border border-emerald-500/35 p-4 flex items-start gap-3 text-sm text-emerald-600 dark:text-emerald-200"
+                    className="rounded-xl bg-emerald-500/10 border border-emerald-500/35 p-4 space-y-3 text-sm text-emerald-700 dark:text-emerald-200"
                   >
-                    <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                    <p className="font-medium">{submitState.text}</p>
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-semibold">{submitState.text}</p>
+                        {submitState.autoReplyDraft && (
+                          <p className="text-xs opacity-90 mt-1.5 leading-relaxed">
+                            {submitState.autoReplyDraft}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {submitState.autoReplyDraft && (
+                      <a
+                        href={buildWhatsAppUrl(
+                          `Hello AizerTech GH, I just submitted an inquiry for ${submitState.submittedService || 'a project'}. Here is my confirmation note:\n\n${submitState.autoReplyDraft}`,
+                          cms.hero.whatsappNumber
+                        )}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="haptic-tap inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#25D366] text-[#070708] text-xs font-semibold hover:bg-[#2EE372]"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        <span>Open WhatsApp Reply Draft</span>
+                      </a>
+                    )}
                   </div>
                 )}
 

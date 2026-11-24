@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
 import { MessageCircle } from 'lucide-react';
 import { MotionConfig } from 'motion/react';
 import { AdminInboxModal } from './components/AdminInboxModal';
+import { BookCallSection } from './components/BookCallSection';
 import { ClientSuccessSection } from './components/ClientSuccessSection';
 import { ContactSection } from './components/ContactSection';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -22,6 +23,7 @@ import {
   normalizeWebsiteCms,
   ServiceType,
   StudioSettings,
+  TestimonialRecord,
   ThemeMode,
   WebsiteCmsData,
 } from './types';
@@ -95,6 +97,8 @@ export default function App() {
   const [studioSettings, setStudioSettings] = useState<StudioSettings>(
     DEFAULT_STUDIO_SETTINGS
   );
+  const [testimonials, setTestimonials] = useState<TestimonialRecord[]>([]);
+  const [testimonialsLoading, setTestimonialsLoading] = useState<boolean>(true);
 
   useEffect(() => {
     const syncAdminRoute = () => {
@@ -184,6 +188,22 @@ export default function App() {
             typeof data.founderBio === 'string' && data.founderBio.trim()
               ? data.founderBio
               : DEFAULT_STUDIO_SETTINGS.founderBio,
+          momoNumber:
+            typeof data.momoNumber === 'string' && data.momoNumber.trim()
+              ? data.momoNumber
+              : DEFAULT_STUDIO_SETTINGS.momoNumber,
+          momoName:
+            typeof data.momoName === 'string' && data.momoName.trim()
+              ? data.momoName
+              : DEFAULT_STUDIO_SETTINGS.momoName,
+          autoReplyMessage:
+            typeof data.autoReplyMessage === 'string' && data.autoReplyMessage.trim()
+              ? data.autoReplyMessage
+              : DEFAULT_STUDIO_SETTINGS.autoReplyMessage,
+          workingHours:
+            typeof data.workingHours === 'string' && data.workingHours.trim()
+              ? data.workingHours
+              : DEFAULT_STUDIO_SETTINGS.workingHours,
           updatedAt: data.updatedAt || null,
         };
         setStudioSettings(nextSettings);
@@ -211,6 +231,46 @@ export default function App() {
     );
     return () => unsubscribe();
   }, [hasLiveDoc]);
+
+  // Real-time subscription to approved public testimonials (client-sorted to avoid composite index dependency)
+  useEffect(() => {
+    const testimonialsQuery = query(
+      collection(db, 'aizertech_testimonials'),
+      where('approved', '==', true)
+    );
+    const unsubscribe = onSnapshot(
+      testimonialsQuery,
+      (snapshot) => {
+        const rows: TestimonialRecord[] = snapshot.docs
+          .map((docSnap) => {
+            const d = docSnap.data();
+            return {
+              id: docSnap.id,
+              clientName: String(d.clientName || 'Client'),
+              service: String(d.service || 'Digital Product'),
+              rating: Number(d.rating) || 5,
+              message: String(d.message || ''),
+              photoUrl: String(d.photoUrl || ''),
+              approved: Boolean(d.approved),
+              createdAt: d.createdAt || null,
+              updatedAt: d.updatedAt || null,
+            };
+          })
+          .sort(
+            (a, b) =>
+              (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0)
+          );
+        setTestimonials(rows);
+        setTestimonialsLoading(false);
+      },
+      (error) => {
+        console.error('Testimonials subscription warning:', error);
+        setTestimonials([]);
+        setTestimonialsLoading(false);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -300,10 +360,20 @@ export default function App() {
 
               <FounderSection cms={liveCms} loading={cmsLoading} />
 
-              <ClientSuccessSection />
+              <ClientSuccessSection
+                testimonials={testimonials}
+                loading={testimonialsLoading}
+                onStartProject={() => scrollToSection('contact')}
+              />
+
+              <BookCallSection
+                cms={liveCms}
+                workingHours={studioSettings.workingHours}
+              />
 
               <ContactSection
                 cms={liveCms}
+                studioSettings={studioSettings}
                 selectedService={selectedService}
                 selectedBudget={selectedBudget}
                 onChangeService={setSelectedService}

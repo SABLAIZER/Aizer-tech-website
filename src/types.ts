@@ -10,7 +10,70 @@ export type BudgetTier =
   | 'GHS 2,500 - 5,000'
   | 'GHS 5,000+';
 
-export type MessageStatus = 'new' | 'reviewed' | 'replied' | 'done' | 'archived';
+export type LeadPipelineStage =
+  | 'new'
+  | 'talking'
+  | 'quoted'
+  | 'paid'
+  | 'done'
+  | 'lost';
+
+export type MessageStatus =
+  | LeadPipelineStage
+  | 'reviewed'
+  | 'replied'
+  | 'archived';
+
+export const LEAD_PIPELINE_STAGES: {
+  id: LeadPipelineStage;
+  label: string;
+  badgeClass: string;
+  dotClass: string;
+  accentBorderClass: string;
+}[] = [
+  {
+    id: 'new',
+    label: 'New',
+    badgeClass: 'bg-[#D4AF37]/15 text-[#FFD700] border border-[#D4AF37]/45',
+    dotClass: 'bg-[#FFD700]',
+    accentBorderClass: 'border-[#D4AF37]/45',
+  },
+  {
+    id: 'talking',
+    label: 'Talking',
+    badgeClass: 'bg-sky-500/15 text-sky-300 border border-sky-500/40',
+    dotClass: 'bg-sky-400',
+    accentBorderClass: 'border-sky-500/40',
+  },
+  {
+    id: 'quoted',
+    label: 'Quoted',
+    badgeClass: 'bg-amber-500/15 text-amber-300 border border-amber-500/40',
+    dotClass: 'bg-amber-400',
+    accentBorderClass: 'border-amber-500/40',
+  },
+  {
+    id: 'paid',
+    label: 'Paid',
+    badgeClass: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/40',
+    dotClass: 'bg-emerald-400',
+    accentBorderClass: 'border-emerald-500/40',
+  },
+  {
+    id: 'done',
+    label: 'Done',
+    badgeClass: 'bg-neutral-500/20 text-neutral-300 border border-neutral-500/40',
+    dotClass: 'bg-neutral-400',
+    accentBorderClass: 'border-neutral-500/35',
+  },
+  {
+    id: 'lost',
+    label: 'Lost',
+    badgeClass: 'bg-red-500/15 text-red-300 border border-red-500/40',
+    dotClass: 'bg-red-400',
+    accentBorderClass: 'border-red-500/35',
+  },
+];
 
 export type MessageCollection = 'aizertech_messages' | 'contactMessages';
 
@@ -24,6 +87,51 @@ export interface ContactMessageRecord {
   budgetTier: string;
   message: string;
   status: MessageStatus;
+  adminNote?: string;
+  createdAt?: { seconds: number; nanoseconds: number } | null;
+  updatedAt?: { seconds: number; nanoseconds: number } | null;
+}
+
+export type InvoiceStatus = 'unpaid' | 'paid';
+
+export interface InvoiceRecord {
+  id: string;
+  invoiceNumber: string;
+  clientName: string;
+  clientPhone: string;
+  clientEmail: string;
+  service: string;
+  amountGhs: number;
+  description: string;
+  invoiceDate: string;
+  status: InvoiceStatus;
+  sourceMessageId: string;
+  createdAt?: { seconds: number; nanoseconds: number } | null;
+  updatedAt?: { seconds: number; nanoseconds: number } | null;
+}
+
+export type BookingStatus = 'pending' | 'confirmed' | 'done' | 'cancelled';
+
+export interface BookingRecord {
+  id: string;
+  clientName: string;
+  clientPhone: string;
+  preferredDate: string;
+  preferredTime: string;
+  service: string;
+  status: BookingStatus;
+  createdAt?: { seconds: number; nanoseconds: number } | null;
+  updatedAt?: { seconds: number; nanoseconds: number } | null;
+}
+
+export interface TestimonialRecord {
+  id: string;
+  clientName: string;
+  service: string;
+  rating: number;
+  message: string;
+  photoUrl: string;
+  approved: boolean;
   createdAt?: { seconds: number; nanoseconds: number } | null;
   updatedAt?: { seconds: number; nanoseconds: number } | null;
 }
@@ -165,6 +273,20 @@ export function buildWhatsAppUrl(
   return `https://wa.me/${digits}?text=${text}`;
 }
 
+export function formatAutoReplyTemplate(
+  template: string,
+  name: string,
+  service: string
+): string {
+  const safeTemplate =
+    template && template.trim()
+      ? template.trim()
+      : DEFAULT_STUDIO_SETTINGS.autoReplyMessage;
+  return safeTemplate
+    .replace(/\[Name\]/gi, name.trim() || 'there')
+    .replace(/\[Service\]/gi, service.trim() || 'your project');
+}
+
 export const SERVICE_OPTIONS: ServiceType[] = [
   'Business Website (from GHS 800)',
   'Mobile App (from GHS 2,500)',
@@ -189,6 +311,10 @@ export interface StudioSettings {
   whatsappNumber: string;
   contactEmail: string;
   founderBio: string;
+  momoNumber: string;
+  momoName: string;
+  autoReplyMessage: string;
+  workingHours: string;
   updatedAt?: { seconds: number; nanoseconds: number } | null;
 }
 
@@ -204,6 +330,11 @@ export const DEFAULT_STUDIO_SETTINGS: StudioSettings = {
   contactEmail: ADMIN_EMAIL,
   founderBio:
     'Aizer Tech was built in Accra on a straightforward principle: local businesses and emerging brands deserve international-grade websites and mobile software without inflated agency retainers.',
+  momoNumber: '027 633 5736',
+  momoName: 'AizerTech GH',
+  autoReplyMessage:
+    'Hello [Name], Thanks for contacting AizerTech GH! We received your request for [Service]. We will reply within 30 minutes. - AizerTech',
+  workingHours: 'Mon – Sat · 8:00 AM – 7:00 PM GMT',
 };
 
 export const DEFAULT_CMS_SERVICES: CmsServiceItem[] = [
@@ -442,6 +573,10 @@ export const STUDIO_SETTINGS_LIMITS = {
   MAX_EMAIL_LEN: 150,
   MIN_FOUNDER_BIO: 20,
   MAX_FOUNDER_BIO: 600,
+  MAX_MOMO_NUMBER: 30,
+  MAX_MOMO_NAME: 80,
+  MAX_AUTO_REPLY: 500,
+  MAX_WORKING_HOURS: 120,
 } as const;
 
 export const VALIDATION_LIMITS = {

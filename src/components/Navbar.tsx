@@ -10,9 +10,9 @@ interface NavbarProps {
 
 const NAV_LINKS = [
   { label: 'Services', href: '#services' },
-  { label: 'Food App Demo', href: '#portfolio' },
-  { label: 'Process', href: '#process' },
-  { label: 'Founder', href: '#founder' },
+  { label: 'Portfolio', href: '#portfolio' },
+  { label: 'Reviews', href: '#client-success' },
+  { label: 'Book Call', href: '#book-call' },
   { label: 'Contact', href: '#contact' },
 ];
 

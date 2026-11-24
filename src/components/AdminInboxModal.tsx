@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import {
   ArrowLeft,
+  Calendar,
   Check,
   Crown,
   FolderKanban,
@@ -25,8 +26,10 @@ import {
   MailCheck,
   MessageCircle,
   MessageSquare,
+  Receipt,
   RefreshCw,
   Settings,
+  Star,
   Users,
   X,
 } from 'lucide-react';
@@ -49,21 +52,29 @@ import {
 } from '../firebase';
 import {
   ADMIN_EMAIL,
+  BookingRecord,
+  BookingStatus,
   ContactMessageRecord,
+  InvoiceRecord,
+  InvoiceStatus,
   isAllowedAdminEmail,
   MessageStatus,
   normalizeWebsiteCms,
   StudioProjectRecord,
   StudioSettings,
+  TestimonialRecord,
   WebsiteBackupRecord,
   WebsiteCmsData,
 } from '../types';
+import { AdminBookingsView } from './admin/AdminBookingsView';
 import { AdminClientsView } from './admin/AdminClientsView';
 import { AdminDashboardHome } from './admin/AdminDashboardHome';
+import { AdminInvoicesView, InvoiceDraftSeed } from './admin/AdminInvoicesView';
 import { AdminLoginCard } from './admin/AdminLoginCard';
 import { AdminMessagesView } from './admin/AdminMessagesView';
 import { AdminProjectsView } from './admin/AdminProjectsView';
 import { AdminSettingsView } from './admin/AdminSettingsView';
+import { AdminTestimonialsView } from './admin/AdminTestimonialsView';
 import { AdminWebsiteControlView } from './admin/AdminWebsiteControlView';
 import {
   buildClientWhatsAppHref,
@@ -84,6 +95,9 @@ interface AdminInboxModalProps {
 type AdminSection =
   | 'dashboard'
   | 'messages'
+  | 'invoices'
+  | 'bookings'
+  | 'testimonials'
   | 'website'
   | 'clients'
   | 'projects'
@@ -93,9 +107,13 @@ function normalizeStatus(raw: unknown): MessageStatus {
   const val = String(raw || 'new').toLowerCase();
   if (
     val === 'new' ||
+    val === 'talking' ||
+    val === 'quoted' ||
+    val === 'paid' ||
+    val === 'done' ||
+    val === 'lost' ||
     val === 'reviewed' ||
     val === 'replied' ||
-    val === 'done' ||
     val === 'archived'
   ) {
     return val;
@@ -135,8 +153,17 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
   const [projects, setProjects] = useState<StudioProjectRecord[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
 
+  // Real-time Invoices, Bookings, and Testimonials streams
+  const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [bookings, setBookings] = useState<BookingRecord[]>([]);
+  const [loadingBookings, setLoadingBookings] = useState(false);
+  const [testimonials, setTestimonials] = useState<TestimonialRecord[]>([]);
+  const [loadingTestimonials, setLoadingTestimonials] = useState(false);
+
   // Cross-view controls & modals
   const [messageSearchSeed, setMessageSearchSeed] = useState('');
+  const [invoiceSeedDraft, setInvoiceSeedDraft] = useState<InvoiceDraftSeed | null>(null);
   const [selectedModalMessage, setSelectedModalMessage] =
     useState<ContactMessageRecord | null>(null);
   const [newProjectModalOpen, setNewProjectModalOpen] = useState(false);
@@ -172,18 +199,24 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
     user && isAdminEmailMatch && user.emailVerified
   );
 
-  // Subscribe to both message collections & studioProjects
+  // Subscribe to messages, studioProjects, invoices, bookings, testimonials & CMS
   useEffect(() => {
     if (!open || !authReady || !isAuthorizedAdmin) {
       setAizerMessages([]);
       setLegacyMessages([]);
       setProjects([]);
+      setInvoices([]);
+      setBookings([]);
+      setTestimonials([]);
       return;
     }
 
     setLoadingAizer(true);
     setLoadingLegacy(true);
     setLoadingProjects(true);
+    setLoadingInvoices(true);
+    setLoadingBookings(true);
+    setLoadingTestimonials(true);
 
     const aizerQuery = query(
       collection(db, 'aizertech_messages'),
@@ -204,6 +237,7 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
             budgetTier: String(d.budget || d.budgetTier || 'Custom'),
             message: String(d.message || ''),
             status: normalizeStatus(d.status),
+            adminNote: typeof d.adminNote === 'string' ? d.adminNote : '',
             createdAt: d.createdAt || null,
             updatedAt: d.updatedAt || null,
           };
@@ -236,6 +270,7 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
             budgetTier: String(d.budgetTier || d.budget || 'Custom'),
             message: String(d.message || ''),
             status: normalizeStatus(d.status),
+            adminNote: typeof d.adminNote === 'string' ? d.adminNote : '',
             createdAt: d.createdAt || null,
             updatedAt: d.updatedAt || null,
           };
@@ -277,6 +312,105 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
       (error) => {
         setLoadingProjects(false);
         handleFirestoreError(error, OperationType.LIST, 'studioProjects');
+      }
+    );
+
+    const invoicesQuery = query(
+      collection(db, 'aizertech_invoices'),
+      orderBy('createdAt', 'desc')
+    );
+    const unsubInvoices = onSnapshot(
+      invoicesQuery,
+      (snapshot) => {
+        const rows: InvoiceRecord[] = snapshot.docs.map((docSnap) => {
+          const d = docSnap.data();
+          return {
+            id: docSnap.id,
+            invoiceNumber: String(d.invoiceNumber || 'AT-001'),
+            clientName: String(d.clientName || 'Client'),
+            clientPhone: String(d.clientPhone || ''),
+            clientEmail: String(d.clientEmail || ''),
+            service: String(d.service || 'Project Service'),
+            amountGhs: Number(d.amountGhs) || 0,
+            description: String(d.description || ''),
+            invoiceDate: String(d.invoiceDate || ''),
+            status: d.status === 'paid' ? 'paid' : 'unpaid',
+            sourceMessageId: String(d.sourceMessageId || ''),
+            createdAt: d.createdAt || null,
+            updatedAt: d.updatedAt || null,
+          };
+        });
+        setInvoices(rows);
+        setLoadingInvoices(false);
+      },
+      (error) => {
+        setLoadingInvoices(false);
+        handleFirestoreError(error, OperationType.LIST, 'aizertech_invoices');
+      }
+    );
+
+    const bookingsQuery = query(
+      collection(db, 'aizertech_bookings'),
+      orderBy('createdAt', 'desc')
+    );
+    const unsubBookings = onSnapshot(
+      bookingsQuery,
+      (snapshot) => {
+        const rows: BookingRecord[] = snapshot.docs.map((docSnap) => {
+          const d = docSnap.data();
+          const st = String(d.status || 'pending');
+          const status: BookingStatus =
+            st === 'confirmed' || st === 'done' || st === 'cancelled'
+              ? st
+              : 'pending';
+          return {
+            id: docSnap.id,
+            clientName: String(d.clientName || 'Client'),
+            clientPhone: String(d.clientPhone || ''),
+            preferredDate: String(d.preferredDate || ''),
+            preferredTime: String(d.preferredTime || ''),
+            service: String(d.service || 'Consultation'),
+            status,
+            createdAt: d.createdAt || null,
+            updatedAt: d.updatedAt || null,
+          };
+        });
+        setBookings(rows);
+        setLoadingBookings(false);
+      },
+      (error) => {
+        setLoadingBookings(false);
+        handleFirestoreError(error, OperationType.LIST, 'aizertech_bookings');
+      }
+    );
+
+    const testimonialsQuery = query(
+      collection(db, 'aizertech_testimonials'),
+      orderBy('createdAt', 'desc')
+    );
+    const unsubTestimonials = onSnapshot(
+      testimonialsQuery,
+      (snapshot) => {
+        const rows: TestimonialRecord[] = snapshot.docs.map((docSnap) => {
+          const d = docSnap.data();
+          return {
+            id: docSnap.id,
+            clientName: String(d.clientName || 'Client'),
+            service: String(d.service || 'Project'),
+            rating: Number(d.rating) || 5,
+            message: String(d.message || ''),
+            photoUrl: String(d.photoUrl || ''),
+            approved: Boolean(d.approved),
+            createdAt: d.createdAt || null,
+            updatedAt: d.updatedAt || null,
+          };
+        });
+        setTestimonials(rows);
+        setLoadingTestimonials(false);
+      },
+      (error) => {
+        setLoadingTestimonials(false);
+        handleFirestoreError(error, OperationType.LIST, 'aizertech_testimonials');
       }
     );
 
@@ -331,6 +465,9 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
       unsubAizer();
       unsubLegacy();
       unsubProjects();
+      unsubInvoices();
+      unsubBookings();
+      unsubTestimonials();
       unsubDraft();
       unsubLiveCheck();
       unsubBackups();
@@ -346,6 +483,16 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
   const unreadCount = useMemo(
     () => allMessages.filter((m) => m.status === 'new').length,
     [allMessages]
+  );
+
+  const unpaidInvoicesCount = useMemo(
+    () => invoices.filter((inv) => inv.status === 'unpaid').length,
+    [invoices]
+  );
+
+  const pendingBookingsCount = useMemo(
+    () => bookings.filter((b) => b.status === 'pending').length,
+    [bookings]
   );
 
   const clientsWithPhones = useMemo(() => {
@@ -458,10 +605,161 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
     }
   };
 
+  const handleSaveAdminNote = async (
+    msg: ContactMessageRecord,
+    note: string
+  ) => {
+    const path = `${msg.sourceCollection}/${msg.id}`;
+    const trimmed = note.trim().slice(0, 1500);
+    try {
+      await updateDoc(doc(db, msg.sourceCollection, msg.id), {
+        adminNote: trimmed,
+        updatedAt: serverTimestamp(),
+      });
+      if (selectedModalMessage?.id === msg.id) {
+        setSelectedModalMessage((prev) =>
+          prev ? { ...prev, adminNote: trimmed } : prev
+        );
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  };
+
   const handleDeleteMessage = async (msg: ContactMessageRecord) => {
     const path = `${msg.sourceCollection}/${msg.id}`;
     try {
       await deleteDoc(doc(db, msg.sourceCollection, msg.id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
+  };
+
+  const handleCreateInvoice = async (payload: {
+    invoiceNumber: string;
+    clientName: string;
+    clientPhone: string;
+    clientEmail: string;
+    service: string;
+    amountGhs: number;
+    description: string;
+    invoiceDate: string;
+    status: InvoiceStatus;
+    sourceMessageId: string;
+  }) => {
+    try {
+      await addDoc(collection(db, 'aizertech_invoices'), {
+        ...payload,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'aizertech_invoices');
+      throw error;
+    }
+  };
+
+  const handleToggleInvoiceStatus = async (invoice: InvoiceRecord) => {
+    const nextStatus: InvoiceStatus =
+      invoice.status === 'paid' ? 'unpaid' : 'paid';
+    const path = `aizertech_invoices/${invoice.id}`;
+    try {
+      await updateDoc(doc(db, 'aizertech_invoices', invoice.id), {
+        invoiceNumber: invoice.invoiceNumber,
+        clientName: invoice.clientName,
+        clientPhone: invoice.clientPhone,
+        clientEmail: invoice.clientEmail,
+        service: invoice.service,
+        amountGhs: invoice.amountGhs,
+        description: invoice.description,
+        invoiceDate: invoice.invoiceDate,
+        sourceMessageId: invoice.sourceMessageId,
+        status: nextStatus,
+        createdAt: invoice.createdAt,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  };
+
+  const handleDeleteInvoice = async (invoiceId: string) => {
+    const path = `aizertech_invoices/${invoiceId}`;
+    try {
+      await deleteDoc(doc(db, 'aizertech_invoices', invoiceId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
+  };
+
+  const handleUpdateBookingStatus = async (
+    booking: BookingRecord,
+    nextStatus: BookingStatus
+  ) => {
+    const path = `aizertech_bookings/${booking.id}`;
+    try {
+      await updateDoc(doc(db, 'aizertech_bookings', booking.id), {
+        status: nextStatus,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  };
+
+  const handleDeleteBooking = async (bookingId: string) => {
+    const path = `aizertech_bookings/${bookingId}`;
+    try {
+      await deleteDoc(doc(db, 'aizertech_bookings', bookingId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
+  };
+
+  const handleAddTestimonial = async (payload: {
+    clientName: string;
+    service: string;
+    rating: number;
+    message: string;
+    photoUrl: string;
+    approved: boolean;
+  }) => {
+    try {
+      await addDoc(collection(db, 'aizertech_testimonials'), {
+        ...payload,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'aizertech_testimonials');
+      throw error;
+    }
+  };
+
+  const handleToggleApproveTestimonial = async (
+    testimonial: TestimonialRecord
+  ) => {
+    const path = `aizertech_testimonials/${testimonial.id}`;
+    try {
+      await updateDoc(doc(db, 'aizertech_testimonials', testimonial.id), {
+        clientName: testimonial.clientName,
+        service: testimonial.service,
+        rating: testimonial.rating,
+        message: testimonial.message,
+        photoUrl: testimonial.photoUrl,
+        approved: !testimonial.approved,
+        createdAt: testimonial.createdAt,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  };
+
+  const handleDeleteTestimonial = async (testimonialId: string) => {
+    const path = `aizertech_testimonials/${testimonialId}`;
+    try {
+      await deleteDoc(doc(db, 'aizertech_testimonials', testimonialId));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, path);
     }
@@ -615,6 +913,10 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
         whatsappNumber: next.whatsappNumber,
         contactEmail: next.contactEmail,
         founderBio: next.founderBio,
+        momoNumber: next.momoNumber,
+        momoName: next.momoName,
+        autoReplyMessage: next.autoReplyMessage,
+        workingHours: next.workingHours,
         updatedAt: serverTimestamp(),
       });
 
@@ -748,6 +1050,10 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
         whatsappNumber: nextLive.hero.whatsappNumber.trim().slice(0, 20),
         contactEmail: nextLive.hero.email.trim().slice(0, 150),
         founderBio: nextLive.hero.aboutText.trim().slice(0, 600),
+        momoNumber: studioSettings.momoNumber.trim().slice(0, 30),
+        momoName: studioSettings.momoName.trim().slice(0, 80),
+        autoReplyMessage: studioSettings.autoReplyMessage.trim().slice(0, 500),
+        workingHours: studioSettings.workingHours.trim().slice(0, 120),
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
@@ -898,6 +1204,9 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
   }[] = [
     { id: 'dashboard', label: 'Dashboard', shortLabel: 'Home', icon: LayoutDashboard },
     { id: 'messages', label: 'Messages', shortLabel: 'Inbox', icon: MessageSquare, badge: unreadCount },
+    { id: 'invoices', label: 'Invoices', shortLabel: 'Invoices', icon: Receipt, badge: unpaidInvoicesCount },
+    { id: 'bookings', label: 'Bookings', shortLabel: 'Calls', icon: Calendar, badge: pendingBookingsCount },
+    { id: 'testimonials', label: 'Testimonials', shortLabel: 'Reviews', icon: Star },
     { id: 'website', label: 'Website Control', shortLabel: 'Site', icon: Globe },
     { id: 'clients', label: 'Clients', shortLabel: 'Clients', icon: Users },
     { id: 'projects', label: 'Projects', shortLabel: 'Jobs', icon: FolderKanban },
@@ -1053,6 +1362,8 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
             <AdminDashboardHome
               messages={allMessages}
               projects={projects}
+              invoices={invoices}
+              studioSettings={studioSettings}
               loadingMessages={loadingMessages}
               onNavigateTab={(tab) => setActiveSection(tab)}
               onOpenMessageModal={(msg) => {
@@ -1068,13 +1379,52 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
             <AdminMessagesView
               messages={allMessages}
               loadingMessages={loadingMessages}
+              studioSettings={studioSettings}
               initialSearch={messageSearchSeed}
               selectedModalMessage={selectedModalMessage}
               onSelectModalMessage={setSelectedModalMessage}
               onUpdateStatus={handleUpdateMessageStatus}
+              onSaveAdminNote={handleSaveAdminNote}
+              onCreateInvoiceFromMessage={(seed) => {
+                setInvoiceSeedDraft(seed);
+                setSelectedModalMessage(null);
+                setActiveSection('invoices');
+              }}
               onDeleteMessage={handleDeleteMessage}
               hasGmailToken={hasGmailToken}
               onSendGmail={handleSendGmail}
+            />
+          )}
+
+          {activeSection === 'invoices' && (
+            <AdminInvoicesView
+              invoices={invoices}
+              loadingInvoices={loadingInvoices}
+              studioSettings={studioSettings}
+              seedDraft={invoiceSeedDraft}
+              onClearSeedDraft={() => setInvoiceSeedDraft(null)}
+              onCreateInvoice={handleCreateInvoice}
+              onToggleInvoiceStatus={handleToggleInvoiceStatus}
+              onDeleteInvoice={handleDeleteInvoice}
+            />
+          )}
+
+          {activeSection === 'bookings' && (
+            <AdminBookingsView
+              bookings={bookings}
+              loadingBookings={loadingBookings}
+              onUpdateBookingStatus={handleUpdateBookingStatus}
+              onDeleteBooking={handleDeleteBooking}
+            />
+          )}
+
+          {activeSection === 'testimonials' && (
+            <AdminTestimonialsView
+              testimonials={testimonials}
+              loadingTestimonials={loadingTestimonials}
+              onAddTestimonial={handleAddTestimonial}
+              onToggleApprove={handleToggleApproveTestimonial}
+              onDeleteTestimonial={handleDeleteTestimonial}
             />
           )}
 
@@ -1125,7 +1475,7 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
       {/* Mobile Bottom Navigation */}
       <nav
         aria-label="Mobile Admin Navigation"
-        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0A0A0A]/92 backdrop-blur-xl border-t border-[#D4AF37]/20 grid grid-cols-6 h-16 pb-safe"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0A0A0A]/92 backdrop-blur-xl border-t border-[#D4AF37]/20 flex items-center overflow-x-auto no-scrollbar px-1 h-16 pb-safe"
       >
         {navItems.map((item) => {
           const Icon = item.icon;
@@ -1135,7 +1485,7 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
               key={item.id}
               type="button"
               onClick={() => setActiveSection(item.id)}
-              className="relative min-h-[44px] flex flex-col items-center justify-center gap-1 cursor-pointer"
+              className="relative min-w-[68px] shrink-0 h-full min-h-[44px] flex flex-col items-center justify-center gap-1 px-2 cursor-pointer"
             >
               <Icon
                 className={`w-5 h-5 ${
@@ -1143,14 +1493,14 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
                 }`}
               />
               <span
-                className={`text-[10px] font-medium tracking-tight ${
+                className={`text-[10px] font-medium tracking-tight whitespace-nowrap ${
                   active ? 'text-[#FFD700] font-semibold' : 'text-neutral-400'
                 }`}
               >
                 {item.shortLabel}
               </span>
               {typeof item.badge === 'number' && item.badge > 0 && (
-                <span className="absolute top-1.5 right-2 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-[9px] font-bold text-white flex items-center justify-center">
+                <span className="absolute top-1.5 right-3 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-[9px] font-bold text-white flex items-center justify-center">
                   {item.badge}
                 </span>
               )}

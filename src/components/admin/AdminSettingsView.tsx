@@ -1,5 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { KeyRound, Loader2, RotateCcw, Save, ShieldCheck } from 'lucide-react';
+import {
+  Clock,
+  KeyRound,
+  Loader2,
+  MessageSquareText,
+  RotateCcw,
+  Save,
+  ShieldCheck,
+  Smartphone,
+} from 'lucide-react';
 import {
   DEFAULT_STUDIO_SETTINGS,
   STUDIO_SETTINGS_LIMITS,
@@ -81,6 +90,10 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
     const heroHeadline = draft.heroHeadline.trim();
     const heroSubheadline = draft.heroSubheadline.trim();
     const founderBio = draft.founderBio.trim();
+    const momoNumber = draft.momoNumber.trim();
+    const momoName = draft.momoName.trim();
+    const autoReplyMessage = draft.autoReplyMessage.trim();
+    const workingHours = draft.workingHours.trim();
 
     if (
       whatsappNumber.length < STUDIO_SETTINGS_LIMITS.MIN_PHONE_LEN ||
@@ -97,6 +110,22 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
       setSettingsNotice({
         type: 'error',
         text: 'Please enter a valid Studio Contact Email address.',
+      });
+      return;
+    }
+
+    if (momoNumber.length < 7) {
+      setSettingsNotice({
+        type: 'error',
+        text: 'Please enter a valid MTN MoMo / Telecel Cash number.',
+      });
+      return;
+    }
+
+    if (momoName.length < 2) {
+      setSettingsNotice({
+        type: 'error',
+        text: 'Please enter your MoMo Account Name (e.g. AizerTech GH).',
       });
       return;
     }
@@ -137,11 +166,16 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
         heroHeadline,
         heroSubheadline,
         founderBio,
+        momoNumber,
+        momoName,
+        autoReplyMessage:
+          autoReplyMessage || DEFAULT_STUDIO_SETTINGS.autoReplyMessage,
+        workingHours: workingHours || DEFAULT_STUDIO_SETTINGS.workingHours,
       });
       setDirty(false);
       setSettingsNotice({
         type: 'success',
-        text: 'Saved & synced live! Your main website now shows the updated WhatsApp number, email, and pricing.',
+        text: 'Saved & synced live! Your MoMo invoice details, auto-reply template, working hours, and website updated immediately.',
       });
     } catch (error) {
       setSettingsNotice({
@@ -220,13 +254,13 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
       <div className="luxury-card rounded-3xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <p className="text-[11px] font-mono-tabular uppercase tracking-[0.2em] text-[#D4AF37]">
-            Live Site Control
+            Business &amp; Payment Settings
           </p>
           <h1 className="font-luxury text-2xl sm:text-3xl font-bold text-white mt-1">
             Studio Settings
           </h1>
           <p className="text-xs text-neutral-400 mt-1">
-            Any changes published here update the public website automatically
+            Manage MoMo billing details, auto-reply template, working hours, and website contacts
           </p>
         </div>
 
@@ -240,11 +274,107 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
         </button>
       </div>
 
-      {/* Live Website Settings Form */}
+      {/* Live Business & Website Settings Form */}
       <form
         onSubmit={handleSubmitSettings}
         className="luxury-card rounded-3xl p-6 sm:p-8 space-y-6"
       >
+        {/* MoMo Payment + Working Hours + Auto-Reply */}
+        <div className="space-y-4 pb-6 border-b border-white/10">
+          <div>
+            <h2 className="font-luxury text-xl font-bold text-white flex items-center gap-2">
+              <Smartphone className="w-5 h-5 text-[#FFD700]" />
+              <span>MoMo Payment, Auto-Reply &amp; Working Hours</span>
+            </h2>
+            <p className="text-xs text-neutral-400 mt-1">
+              Printed on every PDF/WhatsApp invoice and shown when clients submit inquiries
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label
+                htmlFor="set-momo-number"
+                className="block text-xs font-medium text-neutral-300 mb-1.5"
+              >
+                My MoMo Number
+              </label>
+              <input
+                id="set-momo-number"
+                type="text"
+                maxLength={STUDIO_SETTINGS_LIMITS.MAX_MOMO_NUMBER}
+                value={draft.momoNumber}
+                onChange={(e) => updateField('momoNumber', e.target.value)}
+                placeholder="027 633 5736"
+                className="w-full rounded-2xl bg-[#0A0A0A] border border-white/12 px-4 py-3 text-sm font-mono-tabular text-[#FFD700] focus:outline-none focus:border-[#D4AF37]"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="set-momo-name"
+                className="block text-xs font-medium text-neutral-300 mb-1.5"
+              >
+                MoMo Name
+              </label>
+              <input
+                id="set-momo-name"
+                type="text"
+                maxLength={STUDIO_SETTINGS_LIMITS.MAX_MOMO_NAME}
+                value={draft.momoName}
+                onChange={(e) => updateField('momoName', e.target.value)}
+                placeholder="AizerTech GH"
+                className="w-full rounded-2xl bg-[#0A0A0A] border border-white/12 px-4 py-3 text-sm text-white focus:outline-none focus:border-[#D4AF37]"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="set-working-hours"
+                className="block text-xs font-medium text-neutral-300 mb-1.5"
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-[#D4AF37]" />
+                  <span>My Working Hours</span>
+                </span>
+              </label>
+              <input
+                id="set-working-hours"
+                type="text"
+                maxLength={STUDIO_SETTINGS_LIMITS.MAX_WORKING_HOURS}
+                value={draft.workingHours}
+                onChange={(e) => updateField('workingHours', e.target.value)}
+                placeholder="Mon – Sat · 8:00 AM – 7:00 PM GMT"
+                className="w-full rounded-2xl bg-[#0A0A0A] border border-white/12 px-4 py-3 text-sm text-white focus:outline-none focus:border-[#D4AF37]"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label
+              htmlFor="set-auto-reply"
+              className="block text-xs font-medium text-neutral-300 mb-1.5"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <MessageSquareText className="w-3.5 h-3.5 text-[#D4AF37]" />
+                <span>
+                  My Auto-Reply Message (Use [Name] and [Service] placeholders)
+                </span>
+              </span>
+            </label>
+            <textarea
+              id="set-auto-reply"
+              rows={2}
+              maxLength={STUDIO_SETTINGS_LIMITS.MAX_AUTO_REPLY}
+              value={draft.autoReplyMessage}
+              onChange={(e) => updateField('autoReplyMessage', e.target.value)}
+              placeholder="Hello [Name], Thanks for contacting AizerTech GH! We received your request for [Service]. We will reply within 30 minutes. - AizerTech"
+              className="w-full rounded-2xl bg-[#0A0A0A] border border-white/12 px-4 py-3 text-sm text-white leading-relaxed focus:outline-none focus:border-[#D4AF37]"
+            />
+          </div>
+        </div>
+
+        {/* Contact & Prices */}
         <div>
           <h2 className="font-luxury text-xl font-bold text-white mb-1">
             Contact Channels &amp; Service Prices

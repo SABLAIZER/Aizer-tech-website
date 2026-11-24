@@ -4,6 +4,7 @@ import {
   MessageCircle,
   Phone,
   Search,
+  StickyNote,
   Users,
 } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -13,6 +14,7 @@ import {
   deriveClientsFromMessages,
   formatTimeAgo,
   getInitial,
+  getPipelineStageMeta,
   normalizePhoneKey,
 } from './adminUtils';
 
@@ -89,6 +91,7 @@ export const AdminClientsView: React.FC<AdminClientsViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {filteredClients.map((client, idx) => {
             const phoneDigits = normalizePhoneKey(client.phone);
+            const stageMeta = getPipelineStageMeta(client.lastStage);
             return (
               <motion.article
                 key={client.key}
@@ -125,6 +128,9 @@ export const AdminClientsView: React.FC<AdminClientsViewProps> = ({
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 mb-3">
+                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${stageMeta.badgeClass}`}>
+                      {stageMeta.label}
+                    </span>
                     <span className="px-2.5 py-1 rounded-full bg-white/[0.05] border border-white/10 text-[11px] text-[#FFD700]">
                       {client.lastService}
                     </span>
@@ -136,6 +142,13 @@ export const AdminClientsView: React.FC<AdminClientsViewProps> = ({
                   <p className="text-xs text-neutral-300 leading-relaxed line-clamp-2 bg-white/[0.02] rounded-2xl p-3 border border-white/[0.06]">
                     {client.lastMessage}
                   </p>
+
+                  {client.lastNote && (
+                    <div className="mt-2.5 rounded-2xl bg-[#D4AF37]/8 border border-[#D4AF37]/25 p-2.5 flex items-start gap-2 text-xs text-[#F5D97D]">
+                      <StickyNote className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                      <p className="line-clamp-2">{client.lastNote}</p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-white/10">

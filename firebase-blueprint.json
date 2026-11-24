@@ -22,7 +22,11 @@
           "enum": ["GHS 800 - 1,500", "GHS 1,500 - 2,500", "GHS 2,500 - 5,000", "GHS 5,000+"]
         },
         "message": { "type": "string", "minLength": 10, "maxLength": 2000 },
-        "status": { "type": "string", "enum": ["new", "reviewed", "replied", "done", "archived"] },
+        "status": {
+          "type": "string",
+          "enum": ["new", "talking", "quoted", "paid", "done", "lost", "reviewed", "replied", "archived"]
+        },
+        "adminNote": { "type": "string", "minLength": 0, "maxLength": 1500 },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -39,11 +43,67 @@
         "service": { "type": "string", "minLength": 2, "maxLength": 100 },
         "budget": { "type": "string", "minLength": 1, "maxLength": 60 },
         "message": { "type": "string", "minLength": 5, "maxLength": 2000 },
-        "status": { "type": "string", "enum": ["new", "reviewed", "replied", "done", "archived"] },
+        "status": {
+          "type": "string",
+          "enum": ["new", "talking", "quoted", "paid", "done", "lost", "reviewed", "replied", "archived"]
+        },
+        "adminNote": { "type": "string", "minLength": 0, "maxLength": 1500 },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["name", "email", "phone", "service", "budget", "message", "status", "createdAt", "updatedAt"]
+    },
+    "AizerTechInvoice": {
+      "title": "AizerTechInvoice",
+      "description": "Client invoice generated from Admin with GHS amount, MoMo instructions, and paid/unpaid status.",
+      "type": "object",
+      "properties": {
+        "invoiceNumber": { "type": "string", "minLength": 2, "maxLength": 30 },
+        "clientName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "clientPhone": { "type": "string", "minLength": 0, "maxLength": 30 },
+        "clientEmail": { "type": "string", "minLength": 0, "maxLength": 150 },
+        "service": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "amountGhs": { "type": "number", "minimum": 0, "maximum": 10000000 },
+        "description": { "type": "string", "minLength": 2, "maxLength": 2000 },
+        "invoiceDate": { "type": "string", "minLength": 4, "maxLength": 30 },
+        "status": { "type": "string", "enum": ["unpaid", "paid"] },
+        "sourceMessageId": { "type": "string", "minLength": 0, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["invoiceNumber", "clientName", "clientPhone", "clientEmail", "service", "amountGhs", "description", "invoiceDate", "status", "sourceMessageId", "createdAt", "updatedAt"]
+    },
+    "AizerTechBooking": {
+      "title": "AizerTechBooking",
+      "description": "Free consultation call booking submitted on the public website.",
+      "type": "object",
+      "properties": {
+        "clientName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "clientPhone": { "type": "string", "minLength": 7, "maxLength": 30 },
+        "preferredDate": { "type": "string", "minLength": 6, "maxLength": 20 },
+        "preferredTime": { "type": "string", "minLength": 3, "maxLength": 30 },
+        "service": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "done", "cancelled"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientName", "clientPhone", "preferredDate", "preferredTime", "service", "status", "createdAt", "updatedAt"]
+    },
+    "AizerTechTestimonial": {
+      "title": "AizerTechTestimonial",
+      "description": "Client testimonial managed by Admin and displayed live when approved.",
+      "type": "object",
+      "properties": {
+        "clientName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "service": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "rating": { "type": "number", "minimum": 1, "maximum": 5 },
+        "message": { "type": "string", "minLength": 5, "maxLength": 1200 },
+        "photoUrl": { "type": "string", "minLength": 0, "maxLength": 500000 },
+        "approved": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientName", "service", "rating", "message", "photoUrl", "approved", "createdAt", "updatedAt"]
     },
     "StudioProject": {
       "title": "StudioProject",
@@ -98,7 +158,7 @@
     },
     "StudioSettings": {
       "title": "StudioSettings",
-      "description": "Legacy & synced public portfolio settings.",
+      "description": "Synced studio settings including MoMo payment details, auto-reply template, and working hours.",
       "type": "object",
       "properties": {
         "heroHeadline": { "type": "string", "minLength": 10, "maxLength": 140 },
@@ -110,19 +170,26 @@
         "whatsappNumber": { "type": "string", "minLength": 7, "maxLength": 20 },
         "contactEmail": { "type": "string", "format": "email", "minLength": 5, "maxLength": 150 },
         "founderBio": { "type": "string", "minLength": 20, "maxLength": 600 },
+        "momoNumber": { "type": "string", "minLength": 0, "maxLength": 30 },
+        "momoName": { "type": "string", "minLength": 0, "maxLength": 80 },
+        "autoReplyMessage": { "type": "string", "minLength": 0, "maxLength": 500 },
+        "workingHours": { "type": "string", "minLength": 0, "maxLength": 120 },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["heroHeadline", "heroSubheadline", "announcementBanner", "websiteStartingPrice", "mobileStartingPrice", "brandingStartingPrice", "whatsappNumber", "contactEmail", "founderBio", "updatedAt"]
     }
   },
   "firestore": {
-    "/contactMessages/{messageId}": { "schema": { "$ref": "#/entities/ContactMessage" }, "description": "Contact inquiries." },
-    "/aizertech_messages/{messageId}": { "schema": { "$ref": "#/entities/AizerTechMessage" }, "description": "Primary AizerTech GH inquiries." },
+    "/contactMessages/{messageId}": { "schema": { "$ref": "#/entities/ContactMessage" }, "description": "Legacy contact inquiries." },
+    "/aizertech_messages/{messageId}": { "schema": { "$ref": "#/entities/AizerTechMessage" }, "description": "Primary AizerTech GH inquiries with pipeline stages & private CEO notes." },
+    "/aizertech_invoices/{invoiceId}": { "schema": { "$ref": "#/entities/AizerTechInvoice" }, "description": "Private CEO invoice ledger for MTN MoMo / Telecel Cash billing." },
+    "/aizertech_bookings/{bookingId}": { "schema": { "$ref": "#/entities/AizerTechBooking" }, "description": "Free call consultation bookings submitted by visitors." },
+    "/aizertech_testimonials/{testimonialId}": { "schema": { "$ref": "#/entities/AizerTechTestimonial" }, "description": "Client testimonials; approved items read live by visitors." },
     "/studioProjects/{projectId}": { "schema": { "$ref": "#/entities/StudioProject" }, "description": "Private CEO studio project ledger." },
-    "/aizertech_live/{docId}": { "schema": { "$ref": "#/entities/WebsiteCmsDocument" }, "description": "Live public website CMS document read in real time by visitors." },
+    "/aizertech_live/{docId}": { "schema": { "$ref": "#/entities/WebsiteCmsDocument" }, "description": "Live public website CMS document." },
     "/aizertech_draft/{docId}": { "schema": { "$ref": "#/entities/WebsiteCmsDocument" }, "description": "Private admin-only draft website CMS document." },
     "/aizertech_backup/{backupId}": { "schema": { "$ref": "#/entities/WebsiteBackup" }, "description": "Private admin-only auto-backups saved prior to each publish." },
     "/admins/{adminId}": { "schema": { "$ref": "#/entities/AdminUser" }, "description": "Read-only admin authorization lookup documents." },
-    "/studioSettings/{settingId}": { "schema": { "$ref": "#/entities/StudioSettings" }, "description": "Publicly readable settings document." }
+    "/studioSettings/{settingId}": { "schema": { "$ref": "#/entities/StudioSettings" }, "description": "Publicly readable studio settings including MoMo & auto-reply defaults." }
   }
 }

@@ -2,37 +2,56 @@ import React, { useMemo, useState } from 'react';
 import {
   ArrowDownUp,
   Check,
-  CheckCircle2,
+  Columns3,
   Copy,
+  FilePlus2,
+  List,
+  Loader2,
   Mail,
   MessageCircle,
   Phone,
+  Save,
   Search,
   Send,
+  StickyNote,
   Trash2,
   X,
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { ContactMessageRecord, MessageStatus } from '../../types';
+import {
+  ContactMessageRecord,
+  formatAutoReplyTemplate,
+  LEAD_PIPELINE_STAGES,
+  LeadPipelineStage,
+  MessageStatus,
+  StudioSettings,
+} from '../../types';
+import { InvoiceDraftSeed } from './AdminInvoicesView';
 import {
   buildClientWhatsAppHref,
   formatFullDateTime,
   formatTimeAgo,
   getInitial,
+  getPipelineStageMeta,
   getTimestampMs,
   normalizePhoneKey,
+  normalizePipelineStage,
 } from './adminUtils';
 
-type FilterTab = 'all' | 'new' | 'replied' | 'done';
+type FilterTab = 'all' | LeadPipelineStage;
 type SortOrder = 'newest' | 'oldest';
+type ViewMode = 'list' | 'kanban';
 
 interface AdminMessagesViewProps {
   messages: ContactMessageRecord[];
   loadingMessages: boolean;
+  studioSettings: StudioSettings;
   initialSearch?: string;
   selectedModalMessage: ContactMessageRecord | null;
   onSelectModalMessage: (msg: ContactMessageRecord | null) => void;
   onUpdateStatus: (msg: ContactMessageRecord, nextStatus: MessageStatus) => Promise<void>;
+  onSaveAdminNote: (msg: ContactMessageRecord, note: string) => Promise<void>;
+  onCreateInvoiceFromMessage: (seed: InvoiceDraftSeed) => void;
   onDeleteMessage: (msg: ContactMessageRecord) => Promise<void>;
   hasGmailToken: boolean;
   onSendGmail: (
@@ -42,44 +61,16 @@ interface AdminMessagesViewProps {
   ) => Promise<void>;
 }
 
-function getStatusPill(status: MessageStatus): { label: string; className: string } {
-  if (status === 'new') {
-    return {
-      label: 'New',
-      className: 'bg-[#D4AF37]/15 text-[#FFD700] border border-[#D4AF37]/45',
-    };
-  }
-  if (status === 'replied') {
-    return {
-      label: 'Replied',
-      className: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/40',
-    };
-  }
-  if (status === 'done') {
-    return {
-      label: 'Done',
-      className: 'bg-neutral-500/20 text-neutral-300 border border-neutral-500/40',
-    };
-  }
-  if (status === 'reviewed') {
-    return {
-      label: 'Reviewed',
-      className: 'bg-amber-500/15 text-amber-200 border border-amber-500/35',
-    };
-  }
-  return {
-    label: 'Archived',
-    className: 'bg-white/5 text-neutral-400 border border-white/10',
-  };
-}
-
 export const AdminMessagesView: React.FC<AdminMessagesViewProps> = ({
   messages,
   loadingMessages,
+  studioSettings,
   initialSearch = '',
   selectedModalMessage,
   onSelectModalMessage,
   onUpdateStatus,
+  onSaveAdminNote,
+  onCreateInvoiceFromMessage,
   onDeleteMessage,
   hasGmailToken,
   onSendGmail,
@@ -87,9 +78,15 @@ export const AdminMessagesView: React.FC<AdminMessagesViewProps> = ({
   const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null);
   const [copiedPublicLink, setCopiedPublicLink] = useState(false);
+
+  // Private note draft inside modal
+  const [noteDraft, setNoteDraft] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
+  const [noteSavedFeedback, setNoteSavedFeedback] = useState(false);
 
   // Email composer state inside detail modal
   const [emailComposerOpen, setEmailComposerOpen] = useState(false);
@@ -107,26 +104,42 @@ export const AdminMessagesView: React.FC<AdminMessagesViewProps> = ({
     }
   }, [initialSearch]);
 
-  const counts = useMemo(
-    () => ({
+  React.useEffect(() => {
+    if (selectedModalMessage) {
+      setNoteDraft(selectedModalMessage.adminNote || '');
+      setNoteSavedFeedback(false);
+    }
+  }, [selectedModalMessage]);
+
+  const stageCounts = useMemo(() => {
+    const map: Record<FilterTab, number> = {
       all: messages.length,
-      new: messages.filter((m) => m.status === 'new').length,
-      replied: messages.filter((m) => m.status === 'replied').length,
-      done: messages.filter((m) => m.status === 'done').length,
-    }),
-    [messages]
-  );
+      new: 0,
+      talking: 0,
+      quoted: 0,
+      paid: 0,
+      done: 0,
+      lost: 0,
+    };
+    for (const msg of messages) {
+      const stage = normalizePipelineStage(msg.status);
+      map[stage] += 1;
+    }
+    return map;
+  }, [messages]);
 
   const visibleMessages = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     const filtered = messages.filter((m) => {
-      if (filterTab !== 'all' && m.status !== filterTab) return false;
+      const stage = normalizePipelineStage(m.status);
+      if (filterTab !== 'all' && stage !== filterTab) return false;
       if (!q) return true;
       return (
         m.senderName.toLowerCase().includes(q) ||
         m.senderPhone.toLowerCase().includes(q) ||
         m.senderEmail.toLowerCase().includes(q) ||
-        m.serviceType.toLowerCase().includes(q)
+        m.serviceType.toLowerCase().includes(q) ||
+        (m.adminNote || '').toLowerCase().includes(q)
       );
     });
 
@@ -138,29 +151,50 @@ export const AdminMessagesView: React.FC<AdminMessagesViewProps> = ({
 
   const openModal = (msg: ContactMessageRecord) => {
     onSelectModalMessage(msg);
+    setNoteDraft(msg.adminNote || '');
+    setNoteSavedFeedback(false);
     setEmailComposerOpen(false);
     setEmailNotice(null);
     setReplySubject(`Re: Your ${msg.serviceType} inquiry — Aizer Tech`);
     setReplyBody(
-      `Hi ${msg.senderName},\n\nThank you for reaching out to Aizer Tech regarding your ${msg.serviceType} (${msg.budgetTier}). I would love to get your project started.\n\nPlease reply with a good time to connect or any extra details you have.\n\nBest regards,\nSablaizer (Evans Kwaku Sablah)\nCEO, Aizer Tech · Accra, Ghana`
+      `${formatAutoReplyTemplate(
+        studioSettings.autoReplyMessage,
+        msg.senderName,
+        msg.serviceType
+      )}\n\nPlease reply with any extra details or let us know a good time to chat.\n\nBest regards,\nSablaizer (Evans Kwaku Sablah)\nCEO, AizerTech GH · Accra`
     );
   };
 
-  const handleStatusClick = async (
-    e: React.MouseEvent,
+  const handleStageChange = async (
     msg: ContactMessageRecord,
-    nextStatus: MessageStatus
+    nextStage: LeadPipelineStage
   ) => {
-    e.stopPropagation();
     const key = `${msg.sourceCollection}:${msg.id}`;
     setBusyId(key);
     try {
-      await onUpdateStatus(msg, nextStatus);
+      await onUpdateStatus(msg, nextStage);
       if (selectedModalMessage?.id === msg.id) {
-        onSelectModalMessage({ ...msg, status: nextStatus });
+        onSelectModalMessage({ ...msg, status: nextStage });
       }
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const handleSaveNoteSubmit = async () => {
+    if (!selectedModalMessage) return;
+    setSavingNote(true);
+    setNoteSavedFeedback(false);
+    try {
+      await onSaveAdminNote(selectedModalMessage, noteDraft.trim());
+      onSelectModalMessage({
+        ...selectedModalMessage,
+        adminNote: noteDraft.trim(),
+      });
+      setNoteSavedFeedback(true);
+      window.setTimeout(() => setNoteSavedFeedback(false), 2500);
+    } finally {
+      setSavingNote(false);
     }
   };
 
@@ -191,7 +225,7 @@ export const AdminMessagesView: React.FC<AdminMessagesViewProps> = ({
       await onSendGmail(selectedModalMessage, replySubject, replyBody);
       setEmailNotice({
         type: 'success',
-        text: `Email delivered to ${selectedModalMessage.senderEmail} and marked Replied.`,
+        text: `Email delivered to ${selectedModalMessage.senderEmail} and moved to Talking.`,
       });
       setEmailComposerOpen(false);
     } catch (error) {
@@ -217,28 +251,46 @@ export const AdminMessagesView: React.FC<AdminMessagesViewProps> = ({
     }
   };
 
+  const triggerCreateInvoice = (
+    e: React.MouseEvent,
+    msg: ContactMessageRecord
+  ) => {
+    e.stopPropagation();
+    onCreateInvoiceFromMessage({
+      clientName: msg.senderName,
+      clientPhone: msg.senderPhone,
+      clientEmail: msg.senderEmail,
+      service: msg.serviceType,
+      description: `${msg.serviceType} (${msg.budgetTier}) — ${msg.message.slice(
+        0,
+        140
+      )}`,
+      sourceMessageId: msg.id,
+    });
+  };
+
   return (
     <div className="space-y-6">
-      {/* Top Bar: Search, Status Filter & Sort */}
+      {/* Top Bar: Search, Pipeline Stage Filter, Sort & List/Kanban Toggle */}
       <div className="luxury-card rounded-3xl p-5 sm:p-6 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <p className="text-[11px] font-mono-tabular uppercase tracking-[0.2em] text-[#D4AF37]">
-              Client Inbox
+              Lead Pipeline &amp; Client Inbox
             </p>
             <h1 className="font-luxury text-2xl sm:text-3xl font-bold text-white mt-1">
               Messages ({messages.length})
             </h1>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div className="relative flex-1 sm:w-72">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="relative flex-1 min-w-[200px] sm:w-64">
               <Search className="w-4 h-4 text-[#D4AF37]/75 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search by name or phone..."
+                placeholder="Search name, phone, notes..."
                 className="w-full rounded-2xl bg-[#0A0A0A] border border-white/12 pl-10 pr-9 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#D4AF37]"
               />
               {searchTerm && (
@@ -253,6 +305,33 @@ export const AdminMessagesView: React.FC<AdminMessagesViewProps> = ({
               )}
             </div>
 
+            <div className="inline-flex rounded-2xl bg-[#0A0A0A] border border-white/12 p-1">
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer ${
+                  viewMode === 'list'
+                    ? 'gold-gradient-btn'
+                    : 'text-neutral-300 hover:text-white'
+                }`}
+              >
+                <List className="w-3.5 h-3.5" />
+                <span>List</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('kanban')}
+                className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer ${
+                  viewMode === 'kanban'
+                    ? 'gold-gradient-btn'
+                    : 'text-neutral-300 hover:text-white'
+                }`}
+              >
+                <Columns3 className="w-3.5 h-3.5" />
+                <span>Kanban</span>
+              </button>
+            </div>
+
             <button
               type="button"
               onClick={() =>
@@ -261,45 +340,55 @@ export const AdminMessagesView: React.FC<AdminMessagesViewProps> = ({
               className="haptic-tap-sm min-h-[42px] px-4 py-2 rounded-2xl bg-white/[0.04] border border-white/12 text-xs font-semibold text-neutral-200 hover:border-[#D4AF37]/50 inline-flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
             >
               <ArrowDownUp className="w-3.5 h-3.5 text-[#D4AF37]" />
-              <span>{sortOrder === 'newest' ? 'Newest First' : 'Oldest First'}</span>
+              <span>{sortOrder === 'newest' ? 'Newest' : 'Oldest'}</span>
             </button>
           </div>
         </div>
 
-        {/* Filter Pills */}
+        {/* Pipeline Filter Pills */}
         <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/10">
-          {(
-            [
-              { id: 'all', label: `All (${counts.all})` },
-              { id: 'new', label: `New (${counts.new})` },
-              { id: 'replied', label: `Replied (${counts.replied})` },
-              { id: 'done', label: `Done (${counts.done})` },
-            ] as const
-          ).map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setFilterTab(tab.id)}
-              className={`haptic-tap-sm min-h-[38px] px-4 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-colors ${
-                filterTab === tab.id
-                  ? 'gold-gradient-btn'
-                  : 'bg-white/[0.04] border border-white/10 text-neutral-300 hover:text-white hover:border-[#D4AF37]/40'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+          <button
+            type="button"
+            onClick={() => setFilterTab('all')}
+            className={`haptic-tap-sm min-h-[36px] px-3.5 py-1.5 rounded-full text-xs font-semibold cursor-pointer ${
+              filterTab === 'all'
+                ? 'gold-gradient-btn'
+                : 'bg-white/[0.04] border border-white/10 text-neutral-300 hover:text-white'
+            }`}
+          >
+            All ({stageCounts.all})
+          </button>
+
+          {LEAD_PIPELINE_STAGES.map((stage) => {
+            const active = filterTab === stage.id;
+            return (
+              <button
+                key={stage.id}
+                type="button"
+                onClick={() => setFilterTab(stage.id)}
+                className={`haptic-tap-sm min-h-[36px] px-3.5 py-1.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer ${
+                  active ? 'gold-gradient-btn' : stage.badgeClass
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    active ? 'bg-[#0A0A0A]' : stage.dotClass
+                  }`}
+                />
+                <span>
+                  {stage.label} ({stageCounts[stage.id]})
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Message Cards */}
+      {/* Loading / Empty */}
       {loadingMessages ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="h-44 rounded-3xl bg-white/[0.04] animate-pulse"
-            />
+            <div key={i} className="h-44 rounded-3xl bg-white/[0.04] animate-pulse" />
           ))}
         </div>
       ) : messages.length === 0 ? (
@@ -328,10 +417,129 @@ export const AdminMessagesView: React.FC<AdminMessagesViewProps> = ({
             )}
           </button>
         </div>
+      ) : viewMode === 'kanban' ? (
+        /* KANBAN PIPELINE VIEW */
+        <div className="flex gap-4 overflow-x-auto pb-4">
+          {LEAD_PIPELINE_STAGES.map((stage) => {
+            const stageItems = visibleMessages.filter(
+              (m) => normalizePipelineStage(m.status) === stage.id
+            );
+            return (
+              <div
+                key={stage.id}
+                className="min-w-[290px] w-[290px] shrink-0 rounded-3xl bg-[#0F0F12]/90 border border-white/10 p-4 flex flex-col gap-3"
+              >
+                <div className="flex items-center justify-between pb-2.5 border-b border-white/10">
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1.5 ${stage.badgeClass}`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${stage.dotClass}`} />
+                    <span>{stage.label}</span>
+                  </span>
+                  <span className="font-mono-tabular text-xs font-semibold text-neutral-400">
+                    {stageItems.length}
+                  </span>
+                </div>
+
+                {stageItems.length === 0 ? (
+                  <p className="text-xs text-neutral-500 text-center py-8">
+                    No leads in {stage.label}
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {stageItems.map((msg) => {
+                      const phoneDigits = normalizePhoneKey(msg.senderPhone);
+                      const autoDraft = formatAutoReplyTemplate(
+                        studioSettings.autoReplyMessage,
+                        msg.senderName,
+                        msg.serviceType
+                      );
+                      return (
+                        <div
+                          key={`${msg.sourceCollection}-${msg.id}`}
+                          onClick={() => openModal(msg)}
+                          className={`rounded-2xl bg-[#141418] border p-4 space-y-2.5 cursor-pointer hover:border-[#D4AF37]/50 transition-colors ${stage.accentBorderClass}`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-bold text-white truncate">
+                              {msg.senderName}
+                            </p>
+                            <span className="font-mono-tabular text-[10px] text-neutral-400 shrink-0">
+                              {formatTimeAgo(msg.createdAt)}
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-[#FFD700] font-medium truncate">
+                            {msg.serviceType}
+                          </p>
+                          <p className="font-mono-tabular text-[11px] text-neutral-300">
+                            {msg.budgetTier}
+                          </p>
+
+                          {msg.adminNote && (
+                            <p className="text-[11px] text-amber-200/90 bg-amber-500/10 border border-amber-500/25 rounded-xl px-2.5 py-1.5 line-clamp-2">
+                              Note: {msg.adminNote}
+                            </p>
+                          )}
+
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="pt-2 border-t border-white/10 space-y-2"
+                          >
+                            <select
+                              aria-label="Pipeline stage"
+                              value={normalizePipelineStage(msg.status)}
+                              onChange={(e) =>
+                                handleStageChange(
+                                  msg,
+                                  e.target.value as LeadPipelineStage
+                                )
+                              }
+                              className="w-full rounded-xl bg-[#0A0A0A] border border-white/12 px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#D4AF37]"
+                            >
+                              {LEAD_PIPELINE_STAGES.map((opt) => (
+                                <option key={opt.id} value={opt.id}>
+                                  Move: {opt.label}
+                                </option>
+                              ))}
+                            </select>
+
+                            <div className="flex items-center gap-1.5">
+                              {phoneDigits && (
+                                <a
+                                  href={buildClientWhatsAppHref(
+                                    msg.senderPhone,
+                                    autoDraft
+                                  )}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex-1 py-1.5 rounded-xl bg-[#25D366]/15 border border-[#25D366]/40 text-[11px] font-semibold text-[#25D366] text-center"
+                                >
+                                  WhatsApp
+                                </a>
+                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => triggerCreateInvoice(e, msg)}
+                                className="flex-1 py-1.5 rounded-xl bg-[#D4AF37]/15 border border-[#D4AF37]/40 text-[11px] font-semibold text-[#FFD700] cursor-pointer"
+                              >
+                                Invoice
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       ) : visibleMessages.length === 0 ? (
         <div className="luxury-card rounded-3xl p-8 text-center">
           <p className="text-sm text-neutral-300 mb-4">
-            No messages match your current search or filter.
+            No messages match your current search or stage filter.
           </p>
           <button
             type="button"
@@ -345,12 +553,18 @@ export const AdminMessagesView: React.FC<AdminMessagesViewProps> = ({
           </button>
         </div>
       ) : (
+        /* LIST VIEW */
         <div className="space-y-4">
           {visibleMessages.map((msg, idx) => {
             const key = `${msg.sourceCollection}:${msg.id}`;
             const phoneDigits = normalizePhoneKey(msg.senderPhone);
-            const pill = getStatusPill(msg.status);
+            const stageMeta = getPipelineStageMeta(msg.status);
             const isBusy = busyId === key;
+            const autoDraft = formatAutoReplyTemplate(
+              studioSettings.autoReplyMessage,
+              msg.senderName,
+              msg.serviceType
+            );
 
             return (
               <motion.article
@@ -375,9 +589,12 @@ export const AdminMessagesView: React.FC<AdminMessagesViewProps> = ({
                           {msg.senderName}
                         </h2>
                         <span
-                          className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${pill.className}`}
+                          className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold inline-flex items-center gap-1.5 ${stageMeta.badgeClass}`}
                         >
-                          {pill.label}
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${stageMeta.dotClass}`}
+                          />
+                          <span>{stageMeta.label}</span>
                         </span>
                       </div>
                       <p className="text-xs text-neutral-300 mt-1 break-all">
@@ -402,10 +619,22 @@ export const AdminMessagesView: React.FC<AdminMessagesViewProps> = ({
                   </div>
                 </div>
 
-                {/* Full Message Body */}
-                <p className="text-sm text-neutral-200 leading-relaxed whitespace-pre-wrap py-4">
-                  {msg.message}
-                </p>
+                {/* Full Message Body + Private Note */}
+                <div className="py-4 space-y-3">
+                  <p className="text-sm text-neutral-200 leading-relaxed whitespace-pre-wrap">
+                    {msg.message}
+                  </p>
+
+                  {msg.adminNote && (
+                    <div className="rounded-2xl bg-amber-500/10 border border-amber-500/30 px-3.5 py-2.5 flex items-start gap-2 text-xs text-amber-200">
+                      <StickyNote className="w-3.5 h-3.5 text-[#FFD700] shrink-0 mt-0.5" />
+                      <span>
+                        <strong className="text-[#FFD700]">CEO Note:</strong>{' '}
+                        {msg.adminNote}
+                      </span>
+                    </div>
+                  )}
+                </div>
 
                 {/* Action Bar */}
                 <div
@@ -413,19 +642,30 @@ export const AdminMessagesView: React.FC<AdminMessagesViewProps> = ({
                   className="flex flex-wrap items-center justify-between gap-2.5 pt-4 border-t border-white/10"
                 >
                   <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => triggerCreateInvoice(e, msg)}
+                      className="haptic-tap-sm min-h-[40px] gold-gradient-btn inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold cursor-pointer"
+                    >
+                      <FilePlus2 className="w-3.5 h-3.5" />
+                      <span>Create Invoice</span>
+                    </button>
+
                     {phoneDigits && (
                       <>
                         <a
-                          href={buildClientWhatsAppHref(
-                            msg.senderPhone,
-                            `Hello ${msg.senderName}, this is Sablaizer (CEO, Aizer Tech) following up on your ${msg.serviceType} inquiry.`
-                          )}
+                          href={buildClientWhatsAppHref(msg.senderPhone, autoDraft)}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={() => {
+                            if (msg.status === 'new') {
+                              void handleStageChange(msg, 'talking');
+                            }
+                          }}
                           className="haptic-tap-sm min-h-[40px] inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#25D366]/15 border border-[#25D366]/45 text-xs font-semibold text-[#25D366] hover:bg-[#25D366]/25"
                         >
                           <MessageCircle className="w-3.5 h-3.5" />
-                          <span>Reply WhatsApp</span>
+                          <span>WhatsApp Reply</span>
                         </a>
 
                         <a
@@ -438,25 +678,22 @@ export const AdminMessagesView: React.FC<AdminMessagesViewProps> = ({
                       </>
                     )}
 
-                    <button
-                      type="button"
-                      disabled={isBusy || msg.status === 'replied'}
-                      onClick={(e) => handleStatusClick(e, msg, 'replied')}
-                      className="haptic-tap-sm min-h-[40px] inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/[0.05] border border-white/12 text-xs font-medium text-neutral-200 hover:border-emerald-400/50 hover:text-emerald-300 disabled:opacity-45 cursor-pointer"
+                    {/* Pipeline Stage Selector */}
+                    <select
+                      aria-label="Pipeline stage"
+                      disabled={isBusy}
+                      value={normalizePipelineStage(msg.status)}
+                      onChange={(e) =>
+                        handleStageChange(msg, e.target.value as LeadPipelineStage)
+                      }
+                      className="min-h-[40px] rounded-xl bg-[#0A0A0A] border border-white/15 px-3 py-1.5 text-xs font-semibold text-white focus:outline-none focus:border-[#D4AF37] cursor-pointer"
                     >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Mark Replied</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={isBusy || msg.status === 'done'}
-                      onClick={(e) => handleStatusClick(e, msg, 'done')}
-                      className="haptic-tap-sm min-h-[40px] inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/[0.05] border border-white/12 text-xs font-medium text-neutral-200 hover:border-[#D4AF37]/50 hover:text-[#FFD700] disabled:opacity-45 cursor-pointer"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Mark Done</span>
-                    </button>
+                      {LEAD_PIPELINE_STAGES.map((stage) => (
+                        <option key={stage.id} value={stage.id}>
+                          Stage: {stage.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -502,7 +739,7 @@ export const AdminMessagesView: React.FC<AdminMessagesViewProps> = ({
         </div>
       )}
 
-      {/* Full Message Details Popup Modal */}
+      {/* Full Message Details + Private Notes + Pipeline Stage Modal */}
       {selectedModalMessage && (
         <div
           role="dialog"
@@ -548,6 +785,33 @@ export const AdminMessagesView: React.FC<AdminMessagesViewProps> = ({
               </button>
             </div>
 
+            {/* Pipeline Stage Strip */}
+            <div className="space-y-2">
+              <p className="text-[11px] font-mono-tabular uppercase tracking-wider text-neutral-400">
+                Lead Pipeline Stage
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {LEAD_PIPELINE_STAGES.map((stage) => {
+                  const active =
+                    normalizePipelineStage(selectedModalMessage.status) === stage.id;
+                  return (
+                    <button
+                      key={stage.id}
+                      type="button"
+                      onClick={() =>
+                        handleStageChange(selectedModalMessage, stage.id)
+                      }
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold cursor-pointer ${
+                        active ? 'gold-gradient-btn' : stage.badgeClass
+                      }`}
+                    >
+                      {stage.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
               <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-3.5">
                 <p className="text-neutral-400 mb-1">Service</p>
@@ -576,6 +840,47 @@ export const AdminMessagesView: React.FC<AdminMessagesViewProps> = ({
               <p className="text-sm text-neutral-200 leading-relaxed whitespace-pre-wrap">
                 {selectedModalMessage.message}
               </p>
+            </div>
+
+            {/* Private CEO Notes */}
+            <div className="rounded-2xl bg-[#0A0A0A] border border-[#D4AF37]/25 p-4 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="ceo-private-note"
+                  className="text-[11px] font-mono-tabular uppercase tracking-wider text-[#FFD700] inline-flex items-center gap-1.5"
+                >
+                  <StickyNote className="w-3.5 h-3.5" />
+                  <span>Private CEO Note</span>
+                </label>
+                {noteSavedFeedback && (
+                  <span className="text-[11px] text-emerald-300 font-semibold">
+                    Note saved
+                  </span>
+                )}
+              </div>
+              <textarea
+                id="ceo-private-note"
+                rows={2}
+                value={noteDraft}
+                onChange={(e) => setNoteDraft(e.target.value)}
+                placeholder='e.g. "Client wants app in 2 weeks, budget 3000"'
+                className="w-full rounded-xl bg-[#121215] border border-white/12 px-3.5 py-2 text-xs sm:text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#D4AF37]"
+              />
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  disabled={savingNote}
+                  onClick={handleSaveNoteSubmit}
+                  className="min-h-[36px] px-4 py-1.5 rounded-xl bg-white/[0.06] border border-[#D4AF37]/40 text-xs font-semibold text-[#FFD700] hover:bg-[#D4AF37]/15 inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  {savingNote ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Save className="w-3.5 h-3.5" />
+                  )}
+                  <span>Save Private Note</span>
+                </button>
+              </div>
             </div>
 
             {emailNotice && (
@@ -639,19 +944,35 @@ export const AdminMessagesView: React.FC<AdminMessagesViewProps> = ({
             ) : (
               <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2">
                 <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      onSelectModalMessage(null);
+                      triggerCreateInvoice(e, selectedModalMessage);
+                    }}
+                    className="min-h-[42px] gold-gradient-btn inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-bold cursor-pointer"
+                  >
+                    <FilePlus2 className="w-4 h-4" />
+                    <span>Create Invoice</span>
+                  </button>
+
                   {normalizePhoneKey(selectedModalMessage.senderPhone) && (
                     <>
                       <a
                         href={buildClientWhatsAppHref(
                           selectedModalMessage.senderPhone,
-                          `Hello ${selectedModalMessage.senderName}, this is Sablaizer from Aizer Tech regarding your ${selectedModalMessage.serviceType} project.`
+                          formatAutoReplyTemplate(
+                            studioSettings.autoReplyMessage,
+                            selectedModalMessage.senderName,
+                            selectedModalMessage.serviceType
+                          )
                         )}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="min-h-[42px] inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-[#25D366]/15 border border-[#25D366]/45 text-xs font-semibold text-[#25D366]"
                       >
                         <MessageCircle className="w-4 h-4" />
-                        <span>Reply WhatsApp</span>
+                        <span>Auto-Reply WhatsApp</span>
                       </a>
                       <a
                         href={`tel:${selectedModalMessage.senderPhone}`}
@@ -669,27 +990,6 @@ export const AdminMessagesView: React.FC<AdminMessagesViewProps> = ({
                   >
                     <Mail className="w-4 h-4 text-[#D4AF37]" />
                     <span>Reply Email</span>
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={(e) =>
-                      handleStatusClick(e, selectedModalMessage, 'replied')
-                    }
-                    className="min-h-[42px] px-3.5 py-2 rounded-2xl bg-emerald-500/15 border border-emerald-500/35 text-xs font-semibold text-emerald-300 cursor-pointer"
-                  >
-                    Mark Replied
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) =>
-                      handleStatusClick(e, selectedModalMessage, 'done')
-                    }
-                    className="min-h-[42px] px-3.5 py-2 rounded-2xl gold-gradient-btn text-xs font-bold cursor-pointer"
-                  >
-                    Mark Done
                   </button>
                 </div>
               </div>

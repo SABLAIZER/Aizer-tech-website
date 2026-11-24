@@ -1,6 +1,11 @@
 import {
   ContactMessageRecord,
+  InvoiceRecord,
+  LEAD_PIPELINE_STAGES,
+  LeadPipelineStage,
+  MessageStatus,
   StudioProjectRecord,
+  StudioSettings,
 } from '../../types';
 
 export function getTimestampMs(
@@ -61,7 +66,77 @@ export function normalizePhoneKey(phone?: string): string {
 
 export function buildClientWhatsAppHref(phone: string, message: string): string {
   const digits = normalizePhoneKey(phone);
+  if (!digits) {
+    return `https://wa.me/?text=${encodeURIComponent(message)}`;
+  }
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+}
+
+export function normalizePipelineStage(status: MessageStatus): LeadPipelineStage {
+  if (
+    status === 'new' ||
+    status === 'talking' ||
+    status === 'quoted' ||
+    status === 'paid' ||
+    status === 'done' ||
+    status === 'lost'
+  ) {
+    return status;
+  }
+  if (status === 'replied' || status === 'reviewed') {
+    return 'talking';
+  }
+  return 'done';
+}
+
+export function getPipelineStageMeta(status: MessageStatus) {
+  const stage = normalizePipelineStage(status);
+  return (
+    LEAD_PIPELINE_STAGES.find((s) => s.id === stage) || LEAD_PIPELINE_STAGES[0]
+  );
+}
+
+export function getNextInvoiceNumber(invoices: InvoiceRecord[]): string {
+  let maxNum = 0;
+  for (const inv of invoices) {
+    const match = /AT-(\d+)/i.exec(inv.invoiceNumber || '');
+    if (match) {
+      const parsed = Number(match[1]);
+      if (Number.isFinite(parsed) && parsed > maxNum) {
+        maxNum = parsed;
+      }
+    }
+  }
+  const next = Math.max(maxNum + 1, invoices.length + 1);
+  return `AT-${String(next).padStart(3, '0')}`;
+}
+
+export function buildInvoiceWhatsAppMessage(
+  invoice: InvoiceRecord,
+  settings: StudioSettings
+): string {
+  const amountStr = formatGhs(invoice.amountGhs);
+  const momoNum = settings.momoNumber || '027 633 5736';
+  const momoName = settings.momoName || 'AizerTech GH';
+
+  return [
+    `*AIZERTECH GH — OFFICIAL INVOICE*`,
+    `Invoice No: *${invoice.invoiceNumber}*`,
+    `Date: ${invoice.invoiceDate}`,
+    `Status: ${invoice.status === 'paid' ? 'PAID' : 'UNPAID'}`,
+    ``,
+    `Client: ${invoice.clientName}`,
+    `Service: ${invoice.service}`,
+    `Description: ${invoice.description}`,
+    `Amount Due: *${amountStr}*`,
+    ``,
+    `*PAYMENT DETAILS:*`,
+    `Pay via MTN MoMo / Telecel Cash to: *${momoNum}*`,
+    `Account Name: *${momoName}*`,
+    `Send screenshot after payment so we proceed immediately.`,
+    ``,
+    `Thank you for choosing AizerTech!`,
+  ].join('\n');
 }
 
 export interface DayBucket {
@@ -75,7 +150,7 @@ export function getWeeklyMessageCounts(
 ): DayBucket[] {
   const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const now = new Date();
-  const jsDay = now.getDay(); // 0=Sun, 1=Mon ... 6=Sat
+  const jsDay = now.getDay();
   const mondayOffset = jsDay === 0 ? -6 : 1 - jsDay;
 
   const mondayStart = new Date(
@@ -163,6 +238,8 @@ export interface DerivedClient {
   lastMessage: string;
   lastService: string;
   lastBudget: string;
+  lastStage: LeadPipelineStage;
+  lastNote: string;
   lastContactAt: { seconds: number; nanoseconds: number } | null;
   lastContactMs: number;
   services: string[];
@@ -193,6 +270,8 @@ export function deriveClientsFromMessages(
         lastMessage: msg.message,
         lastService: msg.serviceType || 'Project Inquiry',
         lastBudget: msg.budgetTier || 'Custom',
+        lastStage: normalizePipelineStage(msg.status),
+        lastNote: msg.adminNote || '',
         lastContactAt: msg.createdAt ?? null,
         lastContactMs: msgMs,
         services: msg.serviceType ? [msg.serviceType] : [],
@@ -201,6 +280,7 @@ export function deriveClientsFromMessages(
       existing.messageCount += 1;
       if (!existing.phone && msg.senderPhone) existing.phone = msg.senderPhone;
       if (!existing.email && msg.senderEmail) existing.email = msg.senderEmail;
+      if (!existing.lastNote && msg.adminNote) existing.lastNote = msg.adminNote;
       if (msg.serviceType && !existing.services.includes(msg.serviceType)) {
         existing.services.push(msg.serviceType);
       }
@@ -210,6 +290,7 @@ export function deriveClientsFromMessages(
         existing.lastMessage = msg.message;
         existing.lastService = msg.serviceType || existing.lastService;
         existing.lastBudget = msg.budgetTier || existing.lastBudget;
+        existing.lastStage = normalizePipelineStage(msg.status);
       }
     }
   }
@@ -221,10 +302,15 @@ export function deriveClientsFromMessages(
 
 export function computeDashboardMetrics(
   messages: ContactMessageRecord[],
-  projects: StudioProjectRecord[]
+  projects: StudioProjectRecord[],
+  invoices: InvoiceRecord[] = []
 ) {
   const totalMessages = messages.length;
   const newMessages = messages.filter((m) => m.status === 'new').length;
+  const hotLeads = messages.filter((m) => {
+    const stage = normalizePipelineStage(m.status);
+    return stage === 'talking' || stage === 'quoted';
+  });
 
   const uniquePhones = new Set<string>();
   for (const msg of messages) {
@@ -241,12 +327,28 @@ export function computeDashboardMetrics(
   const averageDonePrice = doneCount > 0 ? totalDoneSum / doneCount : 0;
   const estimatedRevenue = doneCount * averageDonePrice;
 
+  const paidInvoices = invoices.filter((i) => i.status === 'paid');
+  const unpaidInvoices = invoices.filter((i) => i.status === 'unpaid');
+  const totalRevenue = paidInvoices.reduce(
+    (sum, i) => sum + (Number.isFinite(i.amountGhs) ? i.amountGhs : 0),
+    0
+  );
+  const pendingPayments = unpaidInvoices.reduce(
+    (sum, i) => sum + (Number.isFinite(i.amountGhs) ? i.amountGhs : 0),
+    0
+  );
+
   return {
     totalMessages,
     newMessages,
+    hotLeads,
     clientsServed: uniquePhones.size,
     doneCount,
     averageDonePrice,
     estimatedRevenue,
+    paidInvoiceCount: paidInvoices.length,
+    unpaidInvoiceCount: unpaidInvoices.length,
+    totalRevenue,
+    pendingPayments,
   };
 }

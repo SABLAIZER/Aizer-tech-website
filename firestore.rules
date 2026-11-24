@@ -40,7 +40,17 @@ service cloud.firestore {
     }
 
     function isValidMessageStatus(status) {
-      return status is string && status in ['new', 'reviewed', 'replied', 'done', 'archived'];
+      return status is string && status in [
+        'new',
+        'talking',
+        'quoted',
+        'paid',
+        'done',
+        'lost',
+        'reviewed',
+        'replied',
+        'archived'
+      ];
     }
 
     function isValidContactMessage(data) {
@@ -63,26 +73,18 @@ service cloud.firestore {
           'budgetTier',
           'message',
           'status',
+          'adminNote',
           'createdAt',
           'updatedAt'
         ]) &&
         data.senderName is string && data.senderName.size() >= 2 && data.senderName.size() <= 100 &&
         isValidEmail(data.senderEmail) &&
         data.senderPhone is string && data.senderPhone.size() <= 30 &&
-        data.serviceType is string && data.serviceType in [
-          'Business Website (from GHS 800)',
-          'Mobile App (from GHS 2,500)',
-          'Food App / Custom Platform',
-          'Consulting & UI/UX'
-        ] &&
-        data.budgetTier is string && data.budgetTier in [
-          'GHS 800 - 1,500',
-          'GHS 1,500 - 2,500',
-          'GHS 2,500 - 5,000',
-          'GHS 5,000+'
-        ] &&
+        data.serviceType is string && data.serviceType.size() >= 2 && data.serviceType.size() <= 100 &&
+        data.budgetTier is string && data.budgetTier.size() >= 1 && data.budgetTier.size() <= 60 &&
         data.message is string && data.message.size() >= 10 && data.message.size() <= 2000 &&
         isValidMessageStatus(data.status) &&
+        (!('adminNote' in data) || (data.adminNote is string && data.adminNote.size() <= 1500)) &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
     }
@@ -93,11 +95,12 @@ service cloud.firestore {
       allow create: if isValidId(messageId) &&
         isValidContactMessage(incoming()) &&
         incoming().status == 'new' &&
+        !('adminNote' in incoming()) &&
         incoming().createdAt == request.time &&
         incoming().updatedAt == request.time;
       allow update: if isValidId(messageId) &&
-        isValidContactMessage(incoming()) &&
         isAdmin() &&
+        isValidContactMessage(incoming()) &&
         incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time &&
         incoming().senderName == existing().senderName &&
@@ -106,7 +109,7 @@ service cloud.firestore {
         incoming().serviceType == existing().serviceType &&
         incoming().budgetTier == existing().budgetTier &&
         incoming().message == existing().message &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'adminNote', 'updatedAt']);
       allow delete: if isValidId(messageId) && isAdmin();
     }
 
@@ -130,6 +133,7 @@ service cloud.firestore {
           'budget',
           'message',
           'status',
+          'adminNote',
           'createdAt',
           'updatedAt'
         ]) &&
@@ -140,6 +144,7 @@ service cloud.firestore {
         data.budget is string && data.budget.size() >= 1 && data.budget.size() <= 60 &&
         data.message is string && data.message.size() >= 5 && data.message.size() <= 2000 &&
         isValidMessageStatus(data.status) &&
+        (!('adminNote' in data) || (data.adminNote is string && data.adminNote.size() <= 1500)) &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
     }
@@ -150,14 +155,170 @@ service cloud.firestore {
       allow create: if isValidId(messageId) &&
         isValidAizerTechMessage(incoming()) &&
         incoming().status == 'new' &&
+        !('adminNote' in incoming()) &&
         incoming().createdAt == request.time &&
         incoming().updatedAt == request.time;
       allow update: if isValidId(messageId) &&
         isAdmin() &&
         isValidMessageStatus(incoming().status) &&
+        (!('adminNote' in incoming()) || (incoming().adminNote is string && incoming().adminNote.size() <= 1500)) &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'adminNote', 'updatedAt']);
+      allow delete: if isValidId(messageId) && isAdmin();
+    }
+
+    function isValidInvoice(data) {
+      return data.keys().hasAll([
+          'invoiceNumber',
+          'clientName',
+          'clientPhone',
+          'clientEmail',
+          'service',
+          'amountGhs',
+          'description',
+          'invoiceDate',
+          'status',
+          'sourceMessageId',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'invoiceNumber',
+          'clientName',
+          'clientPhone',
+          'clientEmail',
+          'service',
+          'amountGhs',
+          'description',
+          'invoiceDate',
+          'status',
+          'sourceMessageId',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.invoiceNumber is string && data.invoiceNumber.size() >= 2 && data.invoiceNumber.size() <= 30 &&
+        data.clientName is string && data.clientName.size() >= 2 && data.clientName.size() <= 100 &&
+        data.clientPhone is string && data.clientPhone.size() <= 30 &&
+        data.clientEmail is string && data.clientEmail.size() <= 150 &&
+        data['service'] is string && data['service'].size() >= 2 && data['service'].size() <= 120 &&
+        data.amountGhs is number && data.amountGhs >= 0 && data.amountGhs <= 10000000 &&
+        data.description is string && data.description.size() >= 2 && data.description.size() <= 2000 &&
+        data.invoiceDate is string && data.invoiceDate.size() >= 4 && data.invoiceDate.size() <= 30 &&
+        data.status is string && data.status in ['unpaid', 'paid'] &&
+        data.sourceMessageId is string && data.sourceMessageId.size() <= 128 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    match /aizertech_invoices/{invoiceId} {
+      allow get: if isValidId(invoiceId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(invoiceId) &&
+        isAdmin() &&
+        isValidInvoice(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(invoiceId) &&
+        isAdmin() &&
+        isValidInvoice(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time;
+      allow delete: if isValidId(invoiceId) && isAdmin();
+    }
+
+    function isValidBooking(data) {
+      return data.keys().hasAll([
+          'clientName',
+          'clientPhone',
+          'preferredDate',
+          'preferredTime',
+          'service',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'clientName',
+          'clientPhone',
+          'preferredDate',
+          'preferredTime',
+          'service',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.clientName is string && data.clientName.size() >= 2 && data.clientName.size() <= 100 &&
+        data.clientPhone is string && data.clientPhone.size() >= 7 && data.clientPhone.size() <= 30 &&
+        data.preferredDate is string && data.preferredDate.size() >= 6 && data.preferredDate.size() <= 20 &&
+        data.preferredTime is string && data.preferredTime.size() >= 3 && data.preferredTime.size() <= 30 &&
+        data['service'] is string && data['service'].size() >= 2 && data['service'].size() <= 120 &&
+        data.status is string && data.status in ['pending', 'confirmed', 'done', 'cancelled'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    match /aizertech_bookings/{bookingId} {
+      allow get: if isValidId(bookingId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(bookingId) &&
+        isValidBooking(incoming()) &&
+        incoming().status == 'pending' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(bookingId) &&
+        isAdmin() &&
+        isValidBooking(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time &&
         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
-      allow delete: if isValidId(messageId) && isAdmin();
+      allow delete: if isValidId(bookingId) && isAdmin();
+    }
+
+    function isValidTestimonial(data) {
+      return data.keys().hasAll([
+          'clientName',
+          'service',
+          'rating',
+          'message',
+          'photoUrl',
+          'approved',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'clientName',
+          'service',
+          'rating',
+          'message',
+          'photoUrl',
+          'approved',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.clientName is string && data.clientName.size() >= 2 && data.clientName.size() <= 100 &&
+        data['service'] is string && data['service'].size() >= 2 && data['service'].size() <= 120 &&
+        data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+        data.message is string && data.message.size() >= 5 && data.message.size() <= 1200 &&
+        data.photoUrl is string && data.photoUrl.size() <= 500000 &&
+        data.approved is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    match /aizertech_testimonials/{testimonialId} {
+      allow get: if isValidId(testimonialId) && (isAdmin() || existing().approved == true);
+      allow list: if isAdmin() || resource.data.approved == true;
+      allow create: if isValidId(testimonialId) &&
+        isAdmin() &&
+        isValidTestimonial(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(testimonialId) &&
+        isAdmin() &&
+        isValidTestimonial(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time;
+      allow delete: if isValidId(testimonialId) && isAdmin();
     }
 
     function isValidStudioProject(data) {
@@ -307,6 +468,10 @@ service cloud.firestore {
           'whatsappNumber',
           'contactEmail',
           'founderBio',
+          'momoNumber',
+          'momoName',
+          'autoReplyMessage',
+          'workingHours',
           'updatedAt'
         ]) &&
         data.heroHeadline is string && data.heroHeadline.size() >= 10 && data.heroHeadline.size() <= 140 &&
@@ -318,6 +483,10 @@ service cloud.firestore {
         data.whatsappNumber is string && data.whatsappNumber.size() >= 7 && data.whatsappNumber.size() <= 20 &&
         isValidEmail(data.contactEmail) &&
         data.founderBio is string && data.founderBio.size() >= 20 && data.founderBio.size() <= 600 &&
+        (!('momoNumber' in data) || (data.momoNumber is string && data.momoNumber.size() <= 30)) &&
+        (!('momoName' in data) || (data.momoName is string && data.momoName.size() <= 80)) &&
+        (!('autoReplyMessage' in data) || (data.autoReplyMessage is string && data.autoReplyMessage.size() <= 500)) &&
+        (!('workingHours' in data) || (data.workingHours is string && data.workingHours.size() <= 120)) &&
         data.updatedAt is timestamp;
     }
 
