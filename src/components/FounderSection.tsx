@@ -1,14 +1,41 @@
 import React, { useState } from 'react';
-import { MapPin, MessageCircle } from 'lucide-react';
-import { buildWhatsAppUrl, FOUNDER_PORTRAIT_URL, StudioSettings } from '../types';
+import { Check, MapPin, MessageCircle } from 'lucide-react';
+import {
+  buildWhatsAppUrl,
+  FOUNDER_PORTRAIT_URL,
+  WebsiteCmsData,
+} from '../types';
 import { Reveal } from './Reveal';
 
 interface FounderSectionProps {
-  settings: StudioSettings;
+  cms: WebsiteCmsData;
+  loading?: boolean;
 }
 
-export const FounderSection: React.FC<FounderSectionProps> = ({ settings }) => {
+export const FounderSection: React.FC<FounderSectionProps> = ({
+  cms,
+  loading = false,
+}) => {
   const [portraitFailed, setPortraitFailed] = useState(false);
+  const { hero, services } = cms;
+
+  const webService =
+    services.find((s) => s.name.toLowerCase().includes('web')) || services[0];
+  const appService =
+    services.find((s) => s.name.toLowerCase().includes('app')) || services[1];
+
+  if (loading) {
+    return (
+      <section
+        id="founder"
+        className="section-ambient py-16 sm:py-20 lg:py-28 border-b border-hairline"
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 animate-pulse">
+          <div className="ios-glass rounded-[28px] h-[380px] p-8" />
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section
@@ -18,14 +45,14 @@ export const FounderSection: React.FC<FounderSectionProps> = ({ settings }) => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10">
         <Reveal>
           <div className="ios-glass rounded-[28px] p-5 sm:p-8 lg:p-12 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
-            {/* Left: Real Founder Portrait + Static Caption Bar (no absolute text) */}
+            {/* Left: Real Founder Portrait + Static Caption Bar */}
             <div className="lg:col-span-5 flex justify-center">
               <div className="w-full max-w-[360px] rounded-[22px] border border-accent/35 overflow-hidden bg-surface-elevated shadow-[0_24px_48px_-16px_rgba(0,0,0,0.45)] flex flex-col">
                 <div className="w-full aspect-[4/5] overflow-hidden bg-surface">
                   {!portraitFailed ? (
                     <img
                       src={FOUNDER_PORTRAIT_URL}
-                      alt="Sablaizer — Evans Kwaku Sablah, Founder of Aizer Tech in Accra, Ghana"
+                      alt={`Sablaizer — Evans Kwaku Sablah, Founder of Aizer Tech in ${hero.location}`}
                       referrerPolicy="no-referrer"
                       onError={() => setPortraitFailed(true)}
                       className="w-full h-full object-cover object-top"
@@ -40,7 +67,7 @@ export const FounderSection: React.FC<FounderSectionProps> = ({ settings }) => {
                       <p className="text-sm font-medium text-ink">
                         Evans Kwaku Sablah
                       </p>
-                      <p className="text-xs text-ink-muted mt-1">Accra, Ghana</p>
+                      <p className="text-xs text-ink-muted mt-1">{hero.location}</p>
                     </div>
                   )}
                 </div>
@@ -52,7 +79,7 @@ export const FounderSection: React.FC<FounderSectionProps> = ({ settings }) => {
                     </p>
                     <p className="text-xs text-accent flex items-center gap-1 mt-1.5">
                       <MapPin className="w-3 h-3 shrink-0" />
-                      <span>Sablaizer · Accra, Ghana</span>
+                      <span>Sablaizer · {hero.location}</span>
                     </p>
                   </div>
                   <span className="font-mono-tabular text-[11px] text-ink-muted shrink-0">
@@ -62,34 +89,50 @@ export const FounderSection: React.FC<FounderSectionProps> = ({ settings }) => {
               </div>
             </div>
 
-            {/* Right: Founder Bio & Attribution */}
+            {/* Right: About Text & Why Us Points */}
             <div className="lg:col-span-7 min-w-0">
               <p className="text-sm text-accent font-medium mb-3">
-                Studio Leadership
+                Studio Leadership &amp; Why Aizer Tech
               </p>
               <h2 className="font-display text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight text-ink leading-[1.2] mb-5">
-                Founded by Sablaizer - Evans Kwaku Sablah from Accra
+                Founded by Sablaizer - Evans Kwaku Sablah ({hero.location})
               </h2>
               <p className="text-sm sm:text-base text-ink-secondary leading-relaxed mb-5">
-                {settings.founderBio}
+                {hero.aboutText}
               </p>
-              <p className="text-sm sm:text-base text-ink-secondary leading-relaxed mb-8">
+              <p className="text-sm sm:text-base text-ink-secondary leading-relaxed mb-6">
                 Every website (
                 <span className="text-ink font-mono-tabular font-semibold whitespace-nowrap">
-                  {settings.websiteStartingPrice}
+                  {webService?.startingPrice || 'From GHS 800'}
                 </span>
                 ) and mobile application (
                 <span className="text-ink font-mono-tabular font-semibold whitespace-nowrap">
-                  {settings.mobileStartingPrice}
+                  {appService?.startingPrice || 'From GHS 2,500'}
                 </span>
-                ) is architected with clean code, Mobile Money readiness, and direct founder accountability from kickoff to launch.
+                ) is engineered with direct founder accountability from kickoff to launch.
               </p>
+
+              {hero.whyUsPoints.length > 0 && (
+                <ul className="space-y-2.5 mb-8">
+                  {hero.whyUsPoints.map((point) => (
+                    <li
+                      key={point}
+                      className="flex items-start gap-2.5 text-sm text-ink-secondary"
+                    >
+                      <span className="w-5 h-5 rounded-full bg-accent/15 border border-accent/40 flex items-center justify-center shrink-0 mt-0.5">
+                        <Check className="w-3 h-3 text-accent" />
+                      </span>
+                      <span>{point}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
 
               <div className="flex flex-col sm:flex-row sm:items-center gap-3.5 sm:gap-4">
                 <a
                   href={buildWhatsAppUrl(
                     'Hello Sablaizer, I would like to speak with you directly about a project with Aizer Tech.',
-                    settings.whatsappNumber
+                    hero.whatsappNumber
                   )}
                   target="_blank"
                   rel="noopener noreferrer"

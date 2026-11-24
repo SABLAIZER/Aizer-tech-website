@@ -18,12 +18,16 @@ import {
   BudgetTier,
   buildWhatsAppUrl,
   DEFAULT_STUDIO_SETTINGS,
+  DEFAULT_WEBSITE_CMS,
+  normalizeWebsiteCms,
   ServiceType,
   StudioSettings,
   ThemeMode,
+  WebsiteCmsData,
 } from './types';
 
 const THEME_STORAGE_KEY = 'aizer-theme';
+const LIVE_CMS_CACHE_KEY = 'aizer_live_website_cache_v1';
 
 function getInitialTheme(): ThemeMode {
   try {
@@ -35,6 +39,26 @@ function getInitialTheme(): ThemeMode {
     // Ignore storage access errors in restricted frames
   }
   return 'obsidian';
+}
+
+function getCachedLiveCms(): { cms: WebsiteCmsData; hasCache: boolean } {
+  try {
+    const raw = window.localStorage.getItem(LIVE_CMS_CACHE_KEY);
+    if (raw) {
+      return { cms: normalizeWebsiteCms(JSON.parse(raw)), hasCache: true };
+    }
+  } catch {
+    // Ignore parse/storage errors
+  }
+  return { cms: DEFAULT_WEBSITE_CMS, hasCache: false };
+}
+
+function saveCachedLiveCms(cms: WebsiteCmsData): void {
+  try {
+    window.localStorage.setItem(LIVE_CMS_CACHE_KEY, JSON.stringify(cms));
+  } catch {
+    // Ignore storage quota errors
+  }
 }
 
 function isAdminUrlRequested(): boolean {
@@ -56,12 +80,18 @@ function isAdminUrlRequested(): boolean {
 }
 
 export default function App() {
+  const initialCache = getCachedLiveCms();
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const [selectedService, setSelectedService] = useState<ServiceType>(
     'Business Website (from GHS 800)'
   );
   const [selectedBudget, setSelectedBudget] = useState<BudgetTier>('GHS 800 - 1,500');
   const [inboxOpen, setInboxOpen] = useState<boolean>(isAdminUrlRequested);
+
+  const [liveCms, setLiveCms] = useState<WebsiteCmsData>(initialCache.cms);
+  const [cmsLoading, setCmsLoading] = useState<boolean>(!initialCache.hasCache);
+  const [hasLiveDoc, setHasLiveDoc] = useState<boolean>(false);
+
   const [studioSettings, setStudioSettings] = useState<StudioSettings>(
     DEFAULT_STUDIO_SETTINGS
   );
@@ -78,6 +108,31 @@ export default function App() {
     };
   }, []);
 
+  // Primary real-time subscription to aizertech_live/website
+  useEffect(() => {
+    const liveRef = doc(db, 'aizertech_live', 'website');
+    const unsubscribe = onSnapshot(
+      liveRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const normalized = normalizeWebsiteCms(snapshot.data());
+          setHasLiveDoc(true);
+          setLiveCms(normalized);
+          saveCachedLiveCms(normalized);
+        } else {
+          setHasLiveDoc(false);
+        }
+        setCmsLoading(false);
+      },
+      (error) => {
+        console.error('Live website subscription warning (using cached version):', error);
+        setCmsLoading(false);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  // Legacy studioSettings/public sync (also keeps Admin Settings backward-compatible)
   useEffect(() => {
     const settingsRef = doc(db, 'studioSettings', 'public');
     const unsubscribe = onSnapshot(
@@ -88,7 +143,7 @@ export default function App() {
           return;
         }
         const data = snapshot.data();
-        setStudioSettings({
+        const nextSettings: StudioSettings = {
           heroHeadline:
             typeof data.heroHeadline === 'string' && data.heroHeadline.trim()
               ? data.heroHeadline
@@ -130,7 +185,24 @@ export default function App() {
               ? data.founderBio
               : DEFAULT_STUDIO_SETTINGS.founderBio,
           updatedAt: data.updatedAt || null,
-        });
+        };
+        setStudioSettings(nextSettings);
+
+        // If aizertech_live/website hasn't been published yet, reflect studioSettings cleanly
+        if (!hasLiveDoc) {
+          setLiveCms((prev) => ({
+            ...prev,
+            hero: {
+              ...prev.hero,
+              heroTitle: nextSettings.heroHeadline,
+              heroSubtitle: nextSettings.heroSubheadline,
+              announcementBanner: nextSettings.announcementBanner,
+              whatsappNumber: nextSettings.whatsappNumber,
+              email: nextSettings.contactEmail,
+              aboutText: nextSettings.founderBio,
+            },
+          }));
+        }
       },
       (error) => {
         console.error('Studio settings subscription warning:', error);
@@ -138,7 +210,7 @@ export default function App() {
       }
     );
     return () => unsubscribe();
-  }, []);
+  }, [hasLiveDoc]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -193,38 +265,45 @@ export default function App() {
           <AdminInboxModal
             open={true}
             fullPage={true}
+            liveCms={liveCms}
             studioSettings={studioSettings}
             onClose={handleCloseInbox}
           />
         ) : (
           <div className="min-h-screen bg-canvas text-ink transition-colors duration-200">
             <Navbar
-              whatsappNumber={studioSettings.whatsappNumber}
+              whatsappNumber={liveCms.hero.whatsappNumber}
               onNavigateContact={() => scrollToSection('contact')}
             />
 
             <main>
               <Hero
-                settings={studioSettings}
+                cms={liveCms}
+                loading={cmsLoading}
                 onStartProject={() => scrollToSection('contact')}
                 onExplorePortfolio={() => scrollToSection('portfolio')}
               />
 
               <ServicesSection
-                settings={studioSettings}
+                cms={liveCms}
+                loading={cmsLoading}
                 onSelectService={handleSelectService}
               />
 
-              <FoodAppShowcase onBuildSimilarFoodApp={handleBuildFoodApp} />
+              <FoodAppShowcase
+                cms={liveCms}
+                loading={cmsLoading}
+                onBuildSimilarFoodApp={handleBuildFoodApp}
+              />
 
               <ProcessSection />
 
-              <FounderSection settings={studioSettings} />
+              <FounderSection cms={liveCms} loading={cmsLoading} />
 
               <ClientSuccessSection />
 
               <ContactSection
-                settings={studioSettings}
+                cms={liveCms}
                 selectedService={selectedService}
                 selectedBudget={selectedBudget}
                 onChangeService={setSelectedService}
@@ -234,15 +313,15 @@ export default function App() {
 
             <Footer
               theme={theme}
-              settings={studioSettings}
+              cms={liveCms}
               onChangeTheme={setTheme}
             />
 
-            {/* Compact Floating iOS Glass WhatsApp Quick Action (<= 48px height to respect mobile sticky budget) */}
+            {/* Compact Floating iOS Glass WhatsApp Quick Action */}
             <a
               href={buildWhatsAppUrl(
                 'Hello Aizer Tech, I saw your portfolio and would like to start a project.',
-                studioSettings.whatsappNumber
+                liveCms.hero.whatsappNumber
               )}
               target="_blank"
               rel="noopener noreferrer"

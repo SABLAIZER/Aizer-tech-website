@@ -3,25 +3,38 @@ import { MessageCircle } from 'lucide-react';
 import {
   buildWhatsAppUrl,
   formatWhatsAppDisplay,
-  StudioSettings,
   THEME_OPTIONS,
   ThemeMode,
+  WebsiteCmsData,
 } from '../types';
 import { BrandMark } from './BrandMark';
 
 interface FooterProps {
   theme: ThemeMode;
-  settings: StudioSettings;
+  cms: WebsiteCmsData;
   onChangeTheme: (theme: ThemeMode) => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
   theme,
-  settings,
+  cms,
   onChangeTheme,
 }) => {
-  const cleanWebRate = settings.websiteStartingPrice.replace(/^From\s+/i, '');
-  const cleanMobileRate = settings.mobileStartingPrice.replace(/^From\s+/i, '');
+  const webService =
+    cms.services.find((s) => s.name.toLowerCase().includes('web')) ||
+    cms.services[0];
+  const appService =
+    cms.services.find((s) => s.name.toLowerCase().includes('app')) ||
+    cms.services[1];
+
+  const cleanWebRate = (webService?.startingPrice || 'From GHS 800').replace(
+    /^From\s+/i,
+    ''
+  );
+  const cleanMobileRate = (appService?.startingPrice || 'From GHS 2,500').replace(
+    /^From\s+/i,
+    ''
+  );
 
   return (
     <footer className="border-t border-hairline bg-surface py-12">
@@ -34,7 +47,7 @@ export const Footer: React.FC<FooterProps> = ({
             </span>
           </div>
           <p className="mt-2 text-sm text-ink-muted">
-            Websites from {cleanWebRate} · Mobile &amp; Food Apps from {cleanMobileRate} · Sablaizer · Accra, Ghana
+            Websites from {cleanWebRate} · Mobile &amp; Food Apps from {cleanMobileRate} · Sablaizer · {cms.hero.location}
           </p>
         </div>
 
@@ -43,7 +56,7 @@ export const Footer: React.FC<FooterProps> = ({
             Services
           </a>
           <a href="#portfolio" className="hover:text-ink transition-colors">
-            Food App Demo
+            Portfolio &amp; Demo
           </a>
           <a href="#founder" className="hover:text-ink transition-colors">
             Founder
@@ -54,26 +67,26 @@ export const Footer: React.FC<FooterProps> = ({
           <a
             href={buildWhatsAppUrl(
               'Hello Aizer Tech, I would like to discuss a website or mobile app.',
-              settings.whatsappNumber
+              cms.hero.whatsappNumber
             )}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-[#25D366] hover:opacity-85 font-medium"
           >
             <MessageCircle className="w-4 h-4" />
-            <span>WhatsApp {formatWhatsAppDisplay(settings.whatsappNumber)}</span>
+            <span>WhatsApp {formatWhatsAppDisplay(cms.hero.whatsappNumber)}</span>
           </a>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 mt-8 pt-6 border-t border-hairline flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs text-ink-subtle">
         <p>
-          © {new Date().getFullYear()} Aizer Tech · Founded by Evans Kwaku Sablah (Sablaizer) in Accra, Ghana ·{' '}
+          © {new Date().getFullYear()} Aizer Tech · Founded by Evans Kwaku Sablah (Sablaizer) in {cms.hero.location} ·{' '}
           <a
-            href={`mailto:${settings.contactEmail}`}
+            href={`mailto:${cms.hero.email}`}
             className="hover:text-ink transition-colors"
           >
-            {settings.contactEmail}
+            {cms.hero.email}
           </a>
         </p>
 

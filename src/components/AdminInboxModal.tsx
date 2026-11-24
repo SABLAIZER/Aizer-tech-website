@@ -17,6 +17,7 @@ import {
   Check,
   Crown,
   FolderKanban,
+  Globe,
   LayoutDashboard,
   Link2,
   Loader2,
@@ -51,8 +52,11 @@ import {
   ContactMessageRecord,
   isAllowedAdminEmail,
   MessageStatus,
+  normalizeWebsiteCms,
   StudioProjectRecord,
   StudioSettings,
+  WebsiteBackupRecord,
+  WebsiteCmsData,
 } from '../types';
 import { AdminClientsView } from './admin/AdminClientsView';
 import { AdminDashboardHome } from './admin/AdminDashboardHome';
@@ -60,6 +64,7 @@ import { AdminLoginCard } from './admin/AdminLoginCard';
 import { AdminMessagesView } from './admin/AdminMessagesView';
 import { AdminProjectsView } from './admin/AdminProjectsView';
 import { AdminSettingsView } from './admin/AdminSettingsView';
+import { AdminWebsiteControlView } from './admin/AdminWebsiteControlView';
 import {
   buildClientWhatsAppHref,
   deriveClientsFromMessages,
@@ -71,11 +76,18 @@ import {
 interface AdminInboxModalProps {
   open: boolean;
   fullPage?: boolean;
+  liveCms: WebsiteCmsData;
   studioSettings: StudioSettings;
   onClose: () => void;
 }
 
-type AdminSection = 'dashboard' | 'messages' | 'clients' | 'projects' | 'settings';
+type AdminSection =
+  | 'dashboard'
+  | 'messages'
+  | 'website'
+  | 'clients'
+  | 'projects'
+  | 'settings';
 
 function normalizeStatus(raw: unknown): MessageStatus {
   const val = String(raw || 'new').toLowerCase();
@@ -93,6 +105,7 @@ function normalizeStatus(raw: unknown): MessageStatus {
 
 export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
   open,
+  liveCms,
   studioSettings,
   onClose,
 }) => {
@@ -106,6 +119,11 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
 
   const [activeSection, setActiveSection] = useState<AdminSection>('dashboard');
   const [copiedAdminLink, setCopiedAdminLink] = useState(false);
+
+  // Website Control CMS streams (aizertech_draft, aizertech_live check, aizertech_backup)
+  const [draftCms, setDraftCms] = useState<WebsiteCmsData | null>(null);
+  const [hasLiveDoc, setHasLiveDoc] = useState(false);
+  const [backups, setBackups] = useState<WebsiteBackupRecord[]>([]);
 
   // Dual real-time Firestore streams (aizertech_messages + contactMessages)
   const [aizerMessages, setAizerMessages] = useState<ContactMessageRecord[]>([]);
@@ -262,10 +280,60 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
       }
     );
 
+    const unsubDraft = onSnapshot(
+      doc(db, 'aizertech_draft', 'website'),
+      (snap) => {
+        if (snap.exists()) {
+          setDraftCms(normalizeWebsiteCms(snap.data()));
+        } else {
+          setDraftCms(null);
+        }
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, 'aizertech_draft/website');
+      }
+    );
+
+    const unsubLiveCheck = onSnapshot(
+      doc(db, 'aizertech_live', 'website'),
+      (snap) => {
+        setHasLiveDoc(snap.exists());
+      },
+      () => {
+        setHasLiveDoc(false);
+      }
+    );
+
+    const backupQuery = query(
+      collection(db, 'aizertech_backup'),
+      orderBy('backedUpAt', 'desc')
+    );
+    const unsubBackups = onSnapshot(
+      backupQuery,
+      (snap) => {
+        const rows: WebsiteBackupRecord[] = snap.docs.map((docSnap) => {
+          const d = docSnap.data();
+          return {
+            id: docSnap.id,
+            label: String(d.label || 'Backup Snapshot'),
+            snapshot: normalizeWebsiteCms(d.snapshot),
+            backedUpAt: d.backedUpAt || null,
+          };
+        });
+        setBackups(rows);
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'aizertech_backup');
+      }
+    );
+
     return () => {
       unsubAizer();
       unsubLegacy();
       unsubProjects();
+      unsubDraft();
+      unsubLiveCheck();
+      unsubBackups();
     };
   }, [open, authReady, isAuthorizedAdmin]);
 
@@ -549,8 +617,151 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
         founderBio: next.founderBio,
         updatedAt: serverTimestamp(),
       });
+
+      const baseCms = draftCms || liveCms;
+      const syncedCms: WebsiteCmsData = {
+        ...baseCms,
+        hero: {
+          ...baseCms.hero,
+          heroTitle: next.heroHeadline.trim() || baseCms.hero.heroTitle,
+          heroSubtitle: next.heroSubheadline.trim() || baseCms.hero.heroSubtitle,
+          announcementBanner: next.announcementBanner.trim(),
+          whatsappNumber: next.whatsappNumber.trim() || baseCms.hero.whatsappNumber,
+          email: next.contactEmail.trim() || baseCms.hero.email,
+          aboutText: next.founderBio.trim() || baseCms.hero.aboutText,
+        },
+        services: baseCms.services.map((svc) => {
+          const lower = svc.name.toLowerCase();
+          if (lower.includes('website')) {
+            return { ...svc, startingPrice: next.websiteStartingPrice.trim() || svc.startingPrice };
+          }
+          if (lower.includes('app')) {
+            return { ...svc, startingPrice: next.mobileStartingPrice.trim() || svc.startingPrice };
+          }
+          if (lower.includes('logo') || lower.includes('ui/ux')) {
+            return { ...svc, startingPrice: next.brandingStartingPrice.trim() || svc.startingPrice };
+          }
+          return svc;
+        }),
+      };
+      const livePayload = buildCmsPayload(syncedCms, true);
+      await setDoc(doc(db, 'aizertech_live', 'website'), livePayload);
+      await setDoc(doc(db, 'aizertech_draft', 'website'), livePayload);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'studioSettings/public');
+    }
+  };
+
+  const buildCmsPayload = (cms: WebsiteCmsData, isPublish: boolean) => ({
+    hero: {
+      heroTitle: cms.hero.heroTitle.trim(),
+      heroSubtitle: cms.hero.heroSubtitle.trim(),
+      announcementBanner: cms.hero.announcementBanner.trim(),
+      whatsappNumber: cms.hero.whatsappNumber.trim(),
+      email: cms.hero.email.trim(),
+      location: cms.hero.location.trim(),
+      aboutText: cms.hero.aboutText.trim(),
+      whyUsPoints: cms.hero.whyUsPoints.map((pt) => pt.trim()).filter(Boolean),
+    },
+    services: cms.services.map((s) => ({
+      id: s.id,
+      name: s.name.trim(),
+      description: s.description.trim(),
+      startingPrice: s.startingPrice.trim(),
+      deliveryTime: s.deliveryTime.trim(),
+      visible: Boolean(s.visible),
+      featured: Boolean(s.featured),
+      deliverables: s.deliverables || [],
+    })),
+    projects: cms.projects.map((p) => ({
+      id: p.id,
+      title: p.title.trim(),
+      category: p.category.trim(),
+      price: p.price.trim(),
+      description: p.description.trim(),
+      imageUrl: p.imageUrl.trim(),
+      clientName: p.clientName.trim(),
+      location: p.location.trim(),
+    })),
+    updatedAt: serverTimestamp(),
+    ...(isPublish ? { publishedAt: serverTimestamp() } : {}),
+  });
+
+  const handleSaveDraft = async (nextDraft: WebsiteCmsData) => {
+    try {
+      await setDoc(
+        doc(db, 'aizertech_draft', 'website'),
+        buildCmsPayload(nextDraft, false)
+      );
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'aizertech_draft/website');
+    }
+  };
+
+  const handlePublishLive = async (nextLive: WebsiteCmsData) => {
+    try {
+      // 1. Auto-Backup current live snapshot to aizertech_backup before publishing
+      const backupLabel = `Live Snapshot (${new Date().toLocaleString('en-GH', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })})`;
+      await addDoc(collection(db, 'aizertech_backup'), {
+        label: backupLabel.slice(0, 120),
+        snapshot: {
+          hero: liveCms.hero,
+          services: liveCms.services,
+          projects: liveCms.projects,
+        },
+        backedUpAt: serverTimestamp(),
+      });
+
+      // 2. Write published content to aizertech_live/website and sync aizertech_draft/website
+      const livePayload = buildCmsPayload(nextLive, true);
+      await setDoc(doc(db, 'aizertech_live', 'website'), livePayload);
+      await setDoc(doc(db, 'aizertech_draft', 'website'), livePayload);
+
+      // 3. Mirror key contact & hero values to studioSettings/public for backward compatibility
+      const webSvc = nextLive.services.find((s) =>
+        s.name.toLowerCase().includes('web')
+      );
+      const appSvc = nextLive.services.find((s) =>
+        s.name.toLowerCase().includes('app')
+      );
+      const brandSvc = nextLive.services.find(
+        (s) =>
+          s.name.toLowerCase().includes('logo') ||
+          s.name.toLowerCase().includes('ui')
+      );
+      await setDoc(doc(db, 'studioSettings', 'public'), {
+        heroHeadline: nextLive.hero.heroTitle.trim().slice(0, 140),
+        heroSubheadline: nextLive.hero.heroSubtitle.trim().slice(0, 350),
+        announcementBanner: nextLive.hero.announcementBanner.trim().slice(0, 160),
+        websiteStartingPrice: (
+          webSvc?.startingPrice || studioSettings.websiteStartingPrice
+        ).slice(0, 40),
+        mobileStartingPrice: (
+          appSvc?.startingPrice || studioSettings.mobileStartingPrice
+        ).slice(0, 40),
+        brandingStartingPrice: (
+          brandSvc?.startingPrice || studioSettings.brandingStartingPrice
+        ).slice(0, 40),
+        whatsappNumber: nextLive.hero.whatsappNumber.trim().slice(0, 20),
+        contactEmail: nextLive.hero.email.trim().slice(0, 150),
+        founderBio: nextLive.hero.aboutText.trim().slice(0, 600),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'aizertech_live/website');
+    }
+  };
+
+  const handleRestoreBackup = async (backup: WebsiteBackupRecord) => {
+    try {
+      const restoredPayload = buildCmsPayload(backup.snapshot, true);
+      await setDoc(doc(db, 'aizertech_live', 'website'), restoredPayload);
+      await setDoc(doc(db, 'aizertech_draft', 'website'), restoredPayload);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'aizertech_live/website');
     }
   };
 
@@ -681,14 +892,16 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
   const navItems: {
     id: AdminSection;
     label: string;
+    shortLabel: string;
     icon: React.ComponentType<{ className?: string }>;
     badge?: number;
   }[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'messages', label: 'Messages', icon: MessageSquare, badge: unreadCount },
-    { id: 'clients', label: 'Clients', icon: Users },
-    { id: 'projects', label: 'Projects', icon: FolderKanban },
-    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'dashboard', label: 'Dashboard', shortLabel: 'Home', icon: LayoutDashboard },
+    { id: 'messages', label: 'Messages', shortLabel: 'Inbox', icon: MessageSquare, badge: unreadCount },
+    { id: 'website', label: 'Website Control', shortLabel: 'Site', icon: Globe },
+    { id: 'clients', label: 'Clients', shortLabel: 'Clients', icon: Users },
+    { id: 'projects', label: 'Projects', shortLabel: 'Jobs', icon: FolderKanban },
+    { id: 'settings', label: 'Settings', shortLabel: 'Config', icon: Settings },
   ];
 
   const loadingMessages = loadingAizer || loadingLegacy;
@@ -865,6 +1078,18 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
             />
           )}
 
+          {activeSection === 'website' && (
+            <AdminWebsiteControlView
+              liveCms={liveCms}
+              draftCms={draftCms}
+              hasLiveDoc={hasLiveDoc}
+              backups={backups}
+              onSaveDraft={handleSaveDraft}
+              onPublishLive={handlePublishLive}
+              onRestoreBackup={handleRestoreBackup}
+            />
+          )}
+
           {activeSection === 'clients' && (
             <AdminClientsView
               messages={allMessages}
@@ -900,7 +1125,7 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
       {/* Mobile Bottom Navigation */}
       <nav
         aria-label="Mobile Admin Navigation"
-        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0A0A0A]/92 backdrop-blur-xl border-t border-[#D4AF37]/20 grid grid-cols-5 h-16 pb-safe"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0A0A0A]/92 backdrop-blur-xl border-t border-[#D4AF37]/20 grid grid-cols-6 h-16 pb-safe"
       >
         {navItems.map((item) => {
           const Icon = item.icon;
@@ -922,10 +1147,10 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
                   active ? 'text-[#FFD700] font-semibold' : 'text-neutral-400'
                 }`}
               >
-                {item.label}
+                {item.shortLabel}
               </span>
               {typeof item.badge === 'number' && item.badge > 0 && (
-                <span className="absolute top-1.5 right-3 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-[9px] font-bold text-white flex items-center justify-center">
+                <span className="absolute top-1.5 right-2 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-[9px] font-bold text-white flex items-center justify-center">
                   {item.badge}
                 </span>
               )}

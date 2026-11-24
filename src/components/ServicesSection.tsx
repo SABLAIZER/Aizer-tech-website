@@ -1,108 +1,76 @@
 import React from 'react';
-import { ArrowUpRight, MessageCircle, Wallet } from 'lucide-react';
+import { ArrowUpRight, Clock, MessageCircle, Wallet } from 'lucide-react';
 import {
   BudgetTier,
   buildWhatsAppUrl,
+  CmsServiceItem,
   ServiceType,
-  StudioSettings,
+  WebsiteCmsData,
 } from '../types';
 import { Reveal } from './Reveal';
 
 interface ServicesSectionProps {
-  settings: StudioSettings;
+  cms: WebsiteCmsData;
+  loading?: boolean;
   onSelectService: (service: ServiceType, budget: BudgetTier) => void;
 }
 
-interface ServiceItem {
-  number: string;
-  title: string;
-  startingPrice: string;
-  cadence: string;
-  description: string;
-  deliverables: string[];
+function mapServiceToBookingArgs(service: CmsServiceItem): {
   serviceType: ServiceType;
   defaultBudget: BudgetTier;
-  featured?: boolean;
+} {
+  const n = service.name.toLowerCase();
+  if (n.includes('app') || n.includes('mobile')) {
+    return {
+      serviceType: 'Mobile App (from GHS 2,500)',
+      defaultBudget: 'GHS 2,500 - 5,000',
+    };
+  }
+  if (n.includes('e-commerce') || n.includes('ecommerce') || n.includes('food')) {
+    return {
+      serviceType: 'Food App / Custom Platform',
+      defaultBudget: 'GHS 1,500 - 2,500',
+    };
+  }
+  if (n.includes('web') || n.includes('site')) {
+    return {
+      serviceType: 'Business Website (from GHS 800)',
+      defaultBudget: 'GHS 800 - 1,500',
+    };
+  }
+  return {
+    serviceType: 'Consulting & UI/UX',
+    defaultBudget: 'GHS 800 - 1,500',
+  };
 }
 
-const SERVICES: ServiceItem[] = [
-  {
-    number: '01.',
-    title: 'Business Websites',
-    startingPrice: 'From GHS 800',
-    cadence: '5 – 10 Days Delivery',
-    description:
-      'Bespoke company websites, flagship landing pages, and digital storefronts built to establish immediate trust and convert Accra & global visitors into clients.',
-    deliverables: [
-      'Custom responsive design tailored to your brand',
-      'WhatsApp instant quote & inquiry routing',
-      'Search-ready structure, SSL security & fast loading',
-      'Contact forms with saved client message database',
-    ],
-    serviceType: 'Business Website (from GHS 800)',
-    defaultBudget: 'GHS 800 - 1,500',
-    featured: true,
-  },
-  {
-    number: '02.',
-    title: 'Mobile Applications (iOS & Android)',
-    startingPrice: 'From GHS 2,500',
-    cadence: '3 – 6 Weeks Delivery',
-    description:
-      'Fluid, native-grade mobile apps engineered for everyday Android and iOS devices across Ghana, complete with local Mobile Money checkout.',
-    deliverables: [
-      'Unified iOS & Android application build',
-      'Mobile Money (MTN MoMo, Telecel) & card readiness',
-      'User accounts, push notifications & live sync',
-      'Play Store & App Store launch preparation',
-    ],
-    serviceType: 'Mobile App (from GHS 2,500)',
-    defaultBudget: 'GHS 2,500 - 5,000',
-    featured: true,
-  },
-  {
-    number: '03.',
-    title: 'Food Ordering & Delivery Apps',
-    startingPrice: 'From GHS 2,500',
-    cadence: 'Restaurant & Cloud Kitchen Ready',
-    description:
-      'Dedicated ordering platforms for Accra restaurants, grill houses, and multi-kitchen brands—eliminating third-party commission leakage.',
-    deliverables: [
-      'Interactive menu with GHS pricing & modifiers',
-      'Instant kitchen order ticket & status tracking',
-      'Zone-based Accra delivery fee calculation',
-    ],
-    serviceType: 'Food App / Custom Platform',
-    defaultBudget: 'GHS 2,500 - 5,000',
-  },
-  {
-    number: '04.',
-    title: 'UI/UX Systems & Product Advisory',
-    startingPrice: 'Project Based',
-    cadence: 'Design & Architecture',
-    description:
-      'Tactile iOS-inspired interface systems, interactive clickable prototypes, and technical roadmaps before full engineering begins.',
-    deliverables: [
-      'Component libraries & brand visual guidelines',
-      'Conversion audits for existing websites & apps',
-      'Database architecture & performance tuning',
-    ],
-    serviceType: 'Consulting & UI/UX',
-    defaultBudget: 'GHS 1,500 - 2,500',
-  },
-];
-
 export const ServicesSection: React.FC<ServicesSectionProps> = ({
-  settings,
+  cms,
+  loading = false,
   onSelectService,
 }) => {
-  const getStartingPrice = (service: ServiceItem): string => {
-    if (service.number === '01.') return settings.websiteStartingPrice;
-    if (service.number === '02.' || service.number === '03.') {
-      return settings.mobileStartingPrice;
-    }
-    return settings.brandingStartingPrice || service.startingPrice;
-  };
+  const visibleServices = cms.services.filter((item) => item.visible);
+
+  if (loading) {
+    return (
+      <section
+        id="services"
+        className="py-16 sm:py-20 lg:py-28 border-b border-hairline"
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 animate-pulse">
+          <div className="h-8 w-80 rounded-2xl bg-surface-elevated mb-10" />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {[1, 2, 3, 4].map((idx) => (
+              <div
+                key={idx}
+                className="lg:col-span-6 h-72 rounded-[22px] ios-glass p-7"
+              />
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section
@@ -122,75 +90,76 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({
               </h2>
             </div>
             <p className="text-sm lg:text-base text-ink-muted max-w-md leading-relaxed">
-              Every Aizer Tech engagement includes clean source architecture, mobile optimization, and direct engineering communication from Accra.
+              Every Aizer Tech engagement includes clean source architecture, mobile optimization, and direct engineering communication from {cms.hero.location}.
             </p>
           </div>
         </Reveal>
 
-        {/* Asymmetric 12-Column Frosted Glass Grid */}
+        {/* Live Dynamic Services Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {SERVICES.map((service, index) => {
-            const colSpan =
-              index === 0
-                ? 'lg:col-span-6'
-                : index === 1
-                ? 'lg:col-span-6'
-                : index === 2
-                ? 'lg:col-span-7'
-                : 'lg:col-span-5';
-            const displayPrice = getStartingPrice(service);
+          {visibleServices.map((service, index) => {
+            const numberLabel = `${String(index + 1).padStart(2, '0')}.`;
+            const isOddLast =
+              visibleServices.length % 2 === 1 &&
+              index === visibleServices.length - 1;
+            const colSpan = isOddLast ? 'lg:col-span-12' : 'lg:col-span-6';
+            const booking = mapServiceToBookingArgs(service);
 
             return (
               <Reveal
-                key={service.number}
-                delay={index * 0.05}
+                key={service.id}
+                delay={Math.min(index * 0.05, 0.2)}
                 className={`${colSpan} w-full`}
               >
                 <article className="h-full w-full min-w-0 ios-glass rounded-[22px] p-5 sm:p-7 lg:p-8 flex flex-col justify-between transition-colors duration-150 hover:border-accent/50">
                   <div className="min-w-0">
-                    {/* Mobile-safe header */}
                     <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2.5 sm:gap-4 pb-5 mb-5 sm:mb-6 border-b border-hairline">
                       <div className="flex items-baseline gap-2.5 min-w-0">
                         <span className="font-mono-tabular text-sm text-accent shrink-0">
-                          {service.number}
+                          {numberLabel}
                         </span>
                         <h3 className="font-display text-lg sm:text-xl lg:text-2xl font-semibold text-ink leading-[1.2] break-words">
-                          {service.title}
+                          {service.name}
                         </h3>
                       </div>
                       <span className="font-mono-tabular text-sm sm:text-base font-semibold text-accent sm:whitespace-nowrap shrink-0">
-                        {displayPrice}
+                        {service.startingPrice}
                       </span>
                     </div>
 
-                    <p className="text-xs text-ink-subtle mb-3">{service.cadence}</p>
+                    <p className="text-xs text-ink-subtle mb-3 inline-flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-accent" />
+                      <span>Delivery: {service.deliveryTime}</span>
+                    </p>
                     <p className="text-sm lg:text-[15px] text-ink-secondary leading-relaxed mb-6">
                       {service.description}
                     </p>
 
-                    <ul className="space-y-2.5 mb-8">
-                      {service.deliverables.map((item) => (
-                        <li
-                          key={item}
-                          className="text-sm text-ink-secondary flex items-start gap-2.5"
-                        >
-                          <span
-                            className="text-accent mt-0.5 select-none shrink-0"
-                            aria-hidden="true"
+                    {service.deliverables.length > 0 && (
+                      <ul className="space-y-2.5 mb-8">
+                        {service.deliverables.map((item) => (
+                          <li
+                            key={item}
+                            className="text-sm text-ink-secondary flex items-start gap-2.5"
                           >
-                            —
-                          </span>
-                          <span>{item}</span>
-                        </li>
-                      ))}
-                    </ul>
+                            <span
+                              className="text-accent mt-0.5 select-none shrink-0"
+                              aria-hidden="true"
+                            >
+                              —
+                            </span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
 
                   <div className="pt-5 border-t border-hairline flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3.5 sm:gap-4">
                     <button
                       type="button"
                       onClick={() =>
-                        onSelectService(service.serviceType, service.defaultBudget)
+                        onSelectService(booking.serviceType, booking.defaultBudget)
                       }
                       className="haptic-tap ios-glass-subtle w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-ink hover:border-accent hover:text-accent sm:whitespace-nowrap shrink-0 cursor-pointer"
                     >
@@ -200,8 +169,8 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({
 
                     <a
                       href={buildWhatsAppUrl(
-                        `Hello Aizer Tech, I am interested in ${service.title} (${displayPrice}).`,
-                        settings.whatsappNumber
+                        `Hello Aizer Tech, I am interested in ${service.name} (${service.startingPrice}).`,
+                        cms.hero.whatsappNumber
                       )}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -235,7 +204,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({
             <a
               href={buildWhatsAppUrl(
                 'Hello Aizer Tech, I am ready to pay the 50% deposit via MoMo to start my project. Please share your Mobile Money details.',
-                settings.whatsappNumber
+                cms.hero.whatsappNumber
               )}
               target="_blank"
               rel="noopener noreferrer"

@@ -10,10 +10,12 @@ import {
   Smartphone,
   X,
 } from 'lucide-react';
-import { FoodDish, PortfolioProject } from '../types';
+import { CmsPortfolioProject, FoodDish, PortfolioProject, WebsiteCmsData } from '../types';
 import { Reveal } from './Reveal';
 
 interface FoodAppShowcaseProps {
+  cms: WebsiteCmsData;
+  loading?: boolean;
   onBuildSimilarFoodApp: () => void;
 }
 
@@ -78,53 +80,12 @@ const FLAGSHIP_FOOD_PROJECT: PortfolioProject = {
   stack: ['React Native', 'TypeScript', 'Firestore Live Sync', 'Mobile Money API'],
 };
 
-const SUPPORTING_PROJECTS: PortfolioProject[] = [
-  {
-    id: 'osu-ridge',
-    title: 'Osu Ridge Advisory',
-    category: 'Corporate Website',
-    tierLabel: 'Business Website · From GHS 800',
-    location: 'Accra, Ghana',
-    summary:
-      'High-contrast architectural web presence for an Accra commercial real estate and legal advisory firm, featuring instant consultation booking and WhatsApp routing.',
-    architecture: [
-      'Responsive editorial layout optimized for executive mobile & desktop reading',
-      'Structured service directory with automated inquiry routing',
-      'Sub-second static asset delivery across West African cellular networks',
-    ],
-    outcomes: [
-      { label: 'Page Load Time', value: '0.8s' },
-      { label: 'Client Inquiries', value: '+3.2x' },
-      { label: 'Mobile Score', value: '99/100' },
-    ],
-    stack: ['React', 'Tailwind CSS', 'SEO Schema', 'Cloud Hosting'],
-  },
-  {
-    id: 'kentepay-merchant',
-    title: 'KentePay Merchant',
-    category: 'Mobile App',
-    tierLabel: 'Mobile App · From GHS 2,500',
-    location: 'Accra & Kumasi',
-    summary:
-      'Inventory and daily reconciliation companion app enabling boutique retailers to issue digital receipts and track Mobile Money collections across branches.',
-    architecture: [
-      'Role-based cashier and owner views with instant daily ledger summaries',
-      'Barcode lookup and offline sale queuing during network drops',
-      'Automated WhatsApp digital receipt sharing for walk-in shoppers',
-    ],
-    outcomes: [
-      { label: 'Daily Sync', value: 'Real-Time' },
-      { label: 'Checkout Speed', value: '4.1s' },
-      { label: 'Platforms', value: 'iOS + Android' },
-    ],
-    stack: ['Flutter / React Native', 'Cloud Sync', 'Receipt Engine'],
-  },
-];
-
 type PhoneTab = 'menu' | 'bag' | 'track';
 type DishFilter = 'All' | 'Jollof & Grill' | 'Local Bowls' | 'Drinks';
 
 export const FoodAppShowcase: React.FC<FoodAppShowcaseProps> = ({
+  cms,
+  loading = false,
   onBuildSimilarFoodApp,
 }) => {
   const [phoneTab, setPhoneTab] = useState<PhoneTab>('menu');
@@ -139,6 +100,7 @@ export const FoodAppShowcase: React.FC<FoodAppShowcaseProps> = ({
   const [deliveryZone, setDeliveryZone] = useState<'Osu' | 'East Legon' | 'Airport'>('Osu');
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [activeProject, setActiveProject] = useState<PortfolioProject | null>(null);
+  const [activeCmsProject, setActiveCmsProject] = useState<CmsPortfolioProject | null>(null);
 
   const filteredDishes = useMemo(() => {
     if (dishFilter === 'All') return FOOD_MENU;
@@ -697,56 +659,149 @@ export const FoodAppShowcase: React.FC<FoodAppShowcaseProps> = ({
         </div>
         </Reveal>
 
-        {/* Supporting Client Portfolio Projects */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-          {SUPPORTING_PROJECTS.map((project, idx) => (
-            <Reveal key={project.id} delay={idx * 0.06} className="w-full">
-            <div
-              className="h-full w-full min-w-0 ios-glass rounded-[22px] p-5 sm:p-7 flex flex-col justify-between hover:border-accent/50 transition-colors"
-            >
-              <div>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 text-xs text-ink-muted mb-3">
-                  <span>
-                    {project.category} · {project.location}
-                  </span>
-                  <span className="font-mono-tabular text-accent font-medium">
-                    {project.tierLabel}
-                  </span>
-                </div>
-                <h3 className="font-display text-xl font-semibold text-ink leading-[1.2] mb-3">
-                  {project.title}
-                </h3>
-                <p className="text-sm text-ink-secondary leading-relaxed mb-6">
-                  {project.summary}
-                </p>
-              </div>
-
-              <div className="pt-4 border-t border-hairline flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                  {project.outcomes.slice(0, 2).map((metric) => (
-                    <div key={metric.label}>
-                      <span className="font-mono-tabular text-sm font-semibold text-ink">
-                        {metric.value}
-                      </span>
-                      <span className="text-xs text-ink-subtle ml-1.5">
-                        {metric.label}
-                      </span>
+        {/* Live Client Portfolio Projects from Firestore */}
+        {loading ? (
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
+            {[1, 2, 3].map((idx) => (
+              <div key={idx} className="h-64 rounded-[22px] ios-glass p-6" />
+            ))}
+          </div>
+        ) : (
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {cms.projects.map((project, idx) => (
+              <Reveal key={project.id} delay={Math.min(idx * 0.05, 0.2)} className="w-full">
+                <div className="h-full w-full min-w-0 ios-glass rounded-[22px] overflow-hidden flex flex-col justify-between hover:border-accent/50 transition-colors">
+                  {project.imageUrl && (
+                    <div className="w-full aspect-[16/10] bg-surface overflow-hidden border-b border-hairline">
+                      <img
+                        src={project.imageUrl}
+                        alt={project.title}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover"
+                      />
                     </div>
-                  ))}
+                  )}
+
+                  <div className="p-5 sm:p-6 flex-1 flex flex-col justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-muted mb-3">
+                        <span>
+                          {project.category} · {project.location || cms.hero.location}
+                        </span>
+                        <span className="font-mono-tabular text-accent font-semibold">
+                          {project.price}
+                        </span>
+                      </div>
+                      <h3 className="font-display text-xl font-semibold text-ink leading-[1.2] mb-2">
+                        {project.title}
+                      </h3>
+                      {project.clientName && (
+                        <p className="text-xs text-ink-subtle mb-3">
+                          Client: {project.clientName}
+                        </p>
+                      )}
+                      <p className="text-sm text-ink-secondary leading-relaxed mb-5">
+                        {project.description}
+                      </p>
+                    </div>
+
+                    <div className="pt-4 border-t border-hairline flex items-center justify-between gap-3">
+                      <span className="text-xs text-ink-subtle">
+                        {project.category}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setActiveCmsProject(project)}
+                        className="haptic-tap text-sm font-medium text-accent hover:opacity-80 cursor-pointer whitespace-nowrap"
+                      >
+                        View Project →
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Live Portfolio Project Lightbox */}
+      {activeCmsProject && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cms-project-title"
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
+          onClick={() => setActiveCmsProject(null)}
+        >
+          <div
+            className="ios-glass max-w-xl w-full rounded-[24px] overflow-hidden max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {activeCmsProject.imageUrl && (
+              <div className="w-full aspect-[16/9] bg-surface border-b border-hairline">
+                <img
+                  src={activeCmsProject.imageUrl}
+                  alt={activeCmsProject.title}
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
+            <div className="p-6 sm:p-8 space-y-5">
+              <div className="flex items-start justify-between gap-4 pb-4 border-b border-hairline">
+                <div>
+                  <p className="text-xs text-accent font-medium mb-1">
+                    {activeCmsProject.category} · {activeCmsProject.location || cms.hero.location}
+                  </p>
+                  <h3
+                    id="cms-project-title"
+                    className="font-display text-2xl font-semibold text-ink leading-[1.2]"
+                  >
+                    {activeCmsProject.title}
+                  </h3>
+                  {activeCmsProject.clientName && (
+                    <p className="text-xs text-ink-muted mt-1">
+                      Client: {activeCmsProject.clientName}
+                    </p>
+                  )}
                 </div>
                 <button
                   type="button"
-                  onClick={() => setActiveProject(project)}
-                  className="haptic-tap text-left sm:text-right text-sm font-medium text-accent hover:opacity-80 cursor-pointer whitespace-nowrap"
+                  aria-label="Close project details"
+                  onClick={() => setActiveCmsProject(null)}
+                  className="haptic-tap-sm w-10 h-10 rounded-lg bg-surface-elevated border border-hairline flex items-center justify-center text-ink-muted hover:text-ink cursor-pointer shrink-0"
                 >
-                  Case Study →
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="text-sm lg:text-base text-ink-secondary leading-relaxed">
+                {activeCmsProject.description}
+              </p>
+
+              <div className="pt-4 border-t border-hairline flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs text-ink-subtle">Build Value</p>
+                  <p className="font-mono-tabular text-base font-semibold text-accent">
+                    {activeCmsProject.price}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveCmsProject(null);
+                    onBuildSimilarFoodApp();
+                  }}
+                  className="haptic-tap px-5 py-2.5 rounded-lg bg-accent-btn text-accent-ink text-sm font-semibold hover:bg-accent-hover cursor-pointer"
+                >
+                  Request Similar Build
                 </button>
               </div>
             </div>
-            </Reveal>
-          ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Case Study Lightbox Modal */}
       {activeProject && (

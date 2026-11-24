@@ -16,13 +16,13 @@ import {
   formatWhatsAppDisplay,
   SERVICE_OPTIONS,
   ServiceType,
-  StudioSettings,
   VALIDATION_LIMITS,
+  WebsiteCmsData,
 } from '../types';
 import { Reveal } from './Reveal';
 
 interface ContactSectionProps {
-  settings: StudioSettings;
+  cms: WebsiteCmsData;
   selectedService: ServiceType;
   selectedBudget: BudgetTier;
   onChangeService: (service: ServiceType) => void;
@@ -30,7 +30,7 @@ interface ContactSectionProps {
 }
 
 export const ContactSection: React.FC<ContactSectionProps> = ({
-  settings,
+  cms,
   selectedService,
   selectedBudget,
   onChangeService,
@@ -152,7 +152,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                   <MapPin className="w-5 h-5 text-accent shrink-0 mt-0.5" />
                   <div>
                     <p className="text-sm font-semibold text-ink">
-                      Accra, Ghana
+                      {cms.hero.location}
                     </p>
                     <p className="text-xs text-ink-muted mt-0.5">
                       Led by Evans Kwaku Sablah (Sablaizer) · Local &amp; International Clients
@@ -164,20 +164,20 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                   <a
                     href={buildWhatsAppUrl(
                       `Hello Aizer Tech, I would like a quote for ${selectedService} (${selectedBudget}).`,
-                      settings.whatsappNumber
+                      cms.hero.whatsappNumber
                     )}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="haptic-tap ios-glass-subtle inline-flex items-center justify-center gap-2.5 px-5 py-3 rounded-xl text-sm font-medium text-ink hover:border-[#25D366]/60"
                   >
                     <MessageCircle className="w-4 h-4 text-[#25D366] shrink-0" />
-                    <span>WhatsApp {formatWhatsAppDisplay(settings.whatsappNumber)}</span>
+                    <span>WhatsApp {formatWhatsAppDisplay(cms.hero.whatsappNumber)}</span>
                   </a>
                   <a
-                    href={`mailto:${settings.contactEmail}`}
+                    href={`mailto:${cms.hero.email}`}
                     className="text-xs font-mono-tabular text-ink-muted hover:text-accent transition-colors"
                   >
-                    {settings.contactEmail}
+                    {cms.hero.email}
                   </a>
                 </div>
               </div>

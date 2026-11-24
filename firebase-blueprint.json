@@ -5,29 +5,11 @@
       "description": "A prospective client inquiry submitted through the Aizer Tech portfolio contact form.",
       "type": "object",
       "properties": {
-        "senderName": {
-          "type": "string",
-          "description": "Full name or company representative name.",
-          "minLength": 2,
-          "maxLength": 100
-        },
-        "senderEmail": {
-          "type": "string",
-          "format": "email",
-          "description": "Client email address for project follow-up.",
-          "minLength": 5,
-          "maxLength": 150,
-          "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
-        },
-        "senderPhone": {
-          "type": "string",
-          "description": "Optional WhatsApp or phone number.",
-          "minLength": 0,
-          "maxLength": 30
-        },
+        "senderName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "senderEmail": { "type": "string", "format": "email", "minLength": 5, "maxLength": 150 },
+        "senderPhone": { "type": "string", "minLength": 0, "maxLength": 30 },
         "serviceType": {
           "type": "string",
-          "description": "Requested service tier or category.",
           "enum": [
             "Business Website (from GHS 800)",
             "Mobile App (from GHS 2,500)",
@@ -37,309 +19,110 @@
         },
         "budgetTier": {
           "type": "string",
-          "description": "Estimated budget range in GHS.",
-          "enum": [
-            "GHS 800 - 1,500",
-            "GHS 1,500 - 2,500",
-            "GHS 2,500 - 5,000",
-            "GHS 5,000+"
-          ]
+          "enum": ["GHS 800 - 1,500", "GHS 1,500 - 2,500", "GHS 2,500 - 5,000", "GHS 5,000+"]
         },
-        "message": {
-          "type": "string",
-          "description": "Project brief and requirements.",
-          "minLength": 10,
-          "maxLength": 2000
-        },
-        "status": {
-          "type": "string",
-          "description": "Inbox triage status.",
-          "enum": [
-            "new",
-            "reviewed",
-            "replied",
-            "done",
-            "archived"
-          ]
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Server timestamp when message was submitted."
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Server timestamp when status was last updated."
-        }
+        "message": { "type": "string", "minLength": 10, "maxLength": 2000 },
+        "status": { "type": "string", "enum": ["new", "reviewed", "replied", "done", "archived"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": [
-        "senderName",
-        "senderEmail",
-        "senderPhone",
-        "serviceType",
-        "budgetTier",
-        "message",
-        "status",
-        "createdAt",
-        "updatedAt"
-      ]
+      "required": ["senderName", "senderEmail", "senderPhone", "serviceType", "budgetTier", "message", "status", "createdAt", "updatedAt"]
     },
     "AizerTechMessage": {
       "title": "AizerTechMessage",
       "description": "A prospective client inquiry stored in the aizertech_messages collection.",
       "type": "object",
       "properties": {
-        "name": {
-          "type": "string",
-          "description": "Client name.",
-          "minLength": 2,
-          "maxLength": 100
-        },
-        "email": {
-          "type": "string",
-          "format": "email",
-          "description": "Client email address.",
-          "minLength": 5,
-          "maxLength": 150,
-          "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
-        },
-        "phone": {
-          "type": "string",
-          "description": "Client WhatsApp or phone number.",
-          "minLength": 0,
-          "maxLength": 30
-        },
-        "service": {
-          "type": "string",
-          "description": "Requested service category.",
-          "minLength": 2,
-          "maxLength": 100
-        },
-        "budget": {
-          "type": "string",
-          "description": "Estimated budget tier.",
-          "minLength": 1,
-          "maxLength": 60
-        },
-        "message": {
-          "type": "string",
-          "description": "Project brief.",
-          "minLength": 5,
-          "maxLength": 2000
-        },
-        "status": {
-          "type": "string",
-          "description": "Message workflow status.",
-          "enum": [
-            "new",
-            "reviewed",
-            "replied",
-            "done",
-            "archived"
-          ]
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Server creation timestamp."
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Server update timestamp."
-        }
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "email": { "type": "string", "format": "email", "minLength": 5, "maxLength": 150 },
+        "phone": { "type": "string", "minLength": 0, "maxLength": 30 },
+        "service": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "budget": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "message": { "type": "string", "minLength": 5, "maxLength": 2000 },
+        "status": { "type": "string", "enum": ["new", "reviewed", "replied", "done", "archived"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": [
-        "name",
-        "email",
-        "phone",
-        "service",
-        "budget",
-        "message",
-        "status",
-        "createdAt",
-        "updatedAt"
-      ]
+      "required": ["name", "email", "phone", "service", "budget", "message", "status", "createdAt", "updatedAt"]
     },
     "StudioProject": {
       "title": "StudioProject",
       "description": "Tracked Aizer Tech client project managed in the CEO console for delivery and revenue computation.",
       "type": "object",
       "properties": {
-        "title": {
-          "type": "string",
-          "minLength": 2,
-          "maxLength": 120
-        },
-        "clientName": {
-          "type": "string",
-          "minLength": 2,
-          "maxLength": 100
-        },
-        "clientPhone": {
-          "type": "string",
-          "minLength": 0,
-          "maxLength": 30
-        },
-        "serviceType": {
-          "type": "string",
-          "minLength": 2,
-          "maxLength": 80
-        },
-        "amountGhs": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 10000000
-        },
-        "status": {
-          "type": "string",
-          "enum": ["in_progress", "done"]
-        },
-        "notes": {
-          "type": "string",
-          "minLength": 0,
-          "maxLength": 1000
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "title": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "clientName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "clientPhone": { "type": "string", "minLength": 0, "maxLength": 30 },
+        "serviceType": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "amountGhs": { "type": "number", "minimum": 0, "maximum": 10000000 },
+        "status": { "type": "string", "enum": ["in_progress", "done"] },
+        "notes": { "type": "string", "minLength": 0, "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": [
-        "title",
-        "clientName",
-        "clientPhone",
-        "serviceType",
-        "amountGhs",
-        "status",
-        "notes",
-        "createdAt",
-        "updatedAt"
-      ]
+      "required": ["title", "clientName", "clientPhone", "serviceType", "amountGhs", "status", "notes", "createdAt", "updatedAt"]
+    },
+    "WebsiteCmsDocument": {
+      "title": "WebsiteCmsDocument",
+      "description": "Full Website Control Center CMS state stored in aizertech_draft/website and aizertech_live/website.",
+      "type": "object",
+      "properties": {
+        "hero": { "type": "object" },
+        "services": { "type": "array" },
+        "projects": { "type": "array" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "publishedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["hero", "services", "projects", "updatedAt"]
+    },
+    "WebsiteBackup": {
+      "title": "WebsiteBackup",
+      "description": "Automatic snapshot stored in aizertech_backup before publishing a new live website version.",
+      "type": "object",
+      "properties": {
+        "label": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "snapshot": { "type": "object" },
+        "backedUpAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["label", "snapshot", "backedUpAt"]
     },
     "AdminUser": {
       "title": "AdminUser",
       "description": "Authorized studio administrator record.",
       "type": "object",
       "properties": {
-        "email": {
-          "type": "string",
-          "format": "email",
-          "minLength": 5,
-          "maxLength": 150
-        },
-        "role": {
-          "type": "string",
-          "enum": ["admin"]
-        }
+        "email": { "type": "string", "format": "email", "minLength": 5, "maxLength": 150 },
+        "role": { "type": "string", "enum": ["admin"] }
       },
       "required": ["email", "role"]
     },
     "StudioSettings": {
       "title": "StudioSettings",
-      "description": "Live public portfolio settings managed exclusively from the private /admin dashboard.",
+      "description": "Legacy & synced public portfolio settings.",
       "type": "object",
       "properties": {
-        "heroHeadline": {
-          "type": "string",
-          "minLength": 10,
-          "maxLength": 140
-        },
-        "heroSubheadline": {
-          "type": "string",
-          "minLength": 10,
-          "maxLength": 350
-        },
-        "announcementBanner": {
-          "type": "string",
-          "minLength": 0,
-          "maxLength": 160
-        },
-        "websiteStartingPrice": {
-          "type": "string",
-          "minLength": 2,
-          "maxLength": 40
-        },
-        "mobileStartingPrice": {
-          "type": "string",
-          "minLength": 2,
-          "maxLength": 40
-        },
-        "brandingStartingPrice": {
-          "type": "string",
-          "minLength": 2,
-          "maxLength": 40
-        },
-        "whatsappNumber": {
-          "type": "string",
-          "minLength": 7,
-          "maxLength": 20
-        },
-        "contactEmail": {
-          "type": "string",
-          "format": "email",
-          "minLength": 5,
-          "maxLength": 150
-        },
-        "founderBio": {
-          "type": "string",
-          "minLength": 20,
-          "maxLength": 600
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "heroHeadline": { "type": "string", "minLength": 10, "maxLength": 140 },
+        "heroSubheadline": { "type": "string", "minLength": 10, "maxLength": 350 },
+        "announcementBanner": { "type": "string", "minLength": 0, "maxLength": 160 },
+        "websiteStartingPrice": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "mobileStartingPrice": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "brandingStartingPrice": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "whatsappNumber": { "type": "string", "minLength": 7, "maxLength": 20 },
+        "contactEmail": { "type": "string", "format": "email", "minLength": 5, "maxLength": 150 },
+        "founderBio": { "type": "string", "minLength": 20, "maxLength": 600 },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": [
-        "heroHeadline",
-        "heroSubheadline",
-        "announcementBanner",
-        "websiteStartingPrice",
-        "mobileStartingPrice",
-        "brandingStartingPrice",
-        "whatsappNumber",
-        "contactEmail",
-        "founderBio",
-        "updatedAt"
-      ]
+      "required": ["heroHeadline", "heroSubheadline", "announcementBanner", "websiteStartingPrice", "mobileStartingPrice", "brandingStartingPrice", "whatsappNumber", "contactEmail", "founderBio", "updatedAt"]
     }
   },
   "firestore": {
-    "/contactMessages/{messageId}": {
-      "schema": {
-        "$ref": "#/entities/ContactMessage"
-      },
-      "description": "Legacy & portfolio contact inquiries readable and manageable strictly by the verified studio admin."
-    },
-    "/aizertech_messages/{messageId}": {
-      "schema": {
-        "$ref": "#/entities/AizerTechMessage"
-      },
-      "description": "Primary AizerTech GH client inquiries readable and manageable strictly by the verified studio admin."
-    },
-    "/studioProjects/{projectId}": {
-      "schema": {
-        "$ref": "#/entities/StudioProject"
-      },
-      "description": "Private CEO studio project tracker for delivery progress and GHS revenue calculations."
-    },
-    "/admins/{adminId}": {
-      "schema": {
-        "$ref": "#/entities/AdminUser"
-      },
-      "description": "Read-only admin authorization lookup documents."
-    },
-    "/studioSettings/{settingId}": {
-      "schema": {
-        "$ref": "#/entities/StudioSettings"
-      },
-      "description": "Publicly readable, admin-only editable website copy, contact channels, and starting rates."
-    }
+    "/contactMessages/{messageId}": { "schema": { "$ref": "#/entities/ContactMessage" }, "description": "Contact inquiries." },
+    "/aizertech_messages/{messageId}": { "schema": { "$ref": "#/entities/AizerTechMessage" }, "description": "Primary AizerTech GH inquiries." },
+    "/studioProjects/{projectId}": { "schema": { "$ref": "#/entities/StudioProject" }, "description": "Private CEO studio project ledger." },
+    "/aizertech_live/{docId}": { "schema": { "$ref": "#/entities/WebsiteCmsDocument" }, "description": "Live public website CMS document read in real time by visitors." },
+    "/aizertech_draft/{docId}": { "schema": { "$ref": "#/entities/WebsiteCmsDocument" }, "description": "Private admin-only draft website CMS document." },
+    "/aizertech_backup/{backupId}": { "schema": { "$ref": "#/entities/WebsiteBackup" }, "description": "Private admin-only auto-backups saved prior to each publish." },
+    "/admins/{adminId}": { "schema": { "$ref": "#/entities/AdminUser" }, "description": "Read-only admin authorization lookup documents." },
+    "/studioSettings/{settingId}": { "schema": { "$ref": "#/entities/StudioSettings" }, "description": "Publicly readable settings document." }
   }
 }

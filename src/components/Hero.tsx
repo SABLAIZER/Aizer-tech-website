@@ -1,24 +1,73 @@
 import React from 'react';
 import { ArrowUpRight, MessageCircle, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
-import { buildWhatsAppUrl, formatWhatsAppDisplay, StudioSettings } from '../types';
+import {
+  buildWhatsAppUrl,
+  formatWhatsAppDisplay,
+  WebsiteCmsData,
+} from '../types';
 import { BrandMark } from './BrandMark';
 
 interface HeroProps {
-  settings: StudioSettings;
+  cms: WebsiteCmsData;
+  loading?: boolean;
   onStartProject: () => void;
   onExplorePortfolio: () => void;
 }
 
 export const Hero: React.FC<HeroProps> = ({
-  settings,
+  cms,
+  loading = false,
   onStartProject,
   onExplorePortfolio,
 }) => {
-  const cleanWebRate = settings.websiteStartingPrice.replace(/^From\s+/i, '');
-  const cleanMobileRate = settings.mobileStartingPrice.replace(/^From\s+/i, '');
-  const whatsappDisplay = formatWhatsAppDisplay(settings.whatsappNumber);
-  const announcement = settings.announcementBanner.trim();
+  const { hero, services } = cms;
+  const webService =
+    services.find((s) => s.name.toLowerCase().includes('web')) || services[0];
+  const appService =
+    services.find((s) => s.name.toLowerCase().includes('app')) || services[1];
+
+  const webRateLabel = webService?.startingPrice || 'From GHS 800';
+  const mobileRateLabel = appService?.startingPrice || 'From GHS 2,500';
+  const cleanWebRate = webRateLabel.replace(/^From\s+/i, '');
+  const cleanMobileRate = mobileRateLabel.replace(/^From\s+/i, '');
+  const whatsappDisplay = formatWhatsAppDisplay(hero.whatsappNumber);
+  const announcement = hero.announcementBanner.trim();
+
+  if (loading) {
+    return (
+      <section
+        id="top"
+        className="section-ambient pt-8 pb-14 sm:pt-14 sm:pb-16 lg:pt-20 lg:pb-24 border-b border-hairline"
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 animate-pulse">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 sm:gap-10 lg:gap-12 items-stretch">
+            <div className="lg:col-span-7 space-y-5 py-2">
+              <div className="h-4 w-56 rounded-full bg-surface-elevated" />
+              <div className="h-12 w-full rounded-2xl bg-surface-elevated" />
+              <div className="h-12 w-4/5 rounded-2xl bg-surface-elevated" />
+              <div className="h-20 w-full max-w-2xl rounded-2xl bg-surface-elevated" />
+              <div className="flex flex-wrap gap-3 pt-4">
+                <div className="h-12 w-40 rounded-xl bg-surface-elevated" />
+                <div className="h-12 w-48 rounded-xl bg-surface-elevated" />
+              </div>
+            </div>
+            <div className="lg:col-span-5">
+              <div className="ios-glass rounded-[24px] h-[340px] p-6" />
+            </div>
+          </div>
+          <div className="mt-12 pt-8 border-t border-hairline grid grid-cols-2 lg:grid-cols-4 gap-6">
+            {[1, 2, 3, 4].map((idx) => (
+              <div key={idx} className="space-y-2">
+                <div className="h-8 w-28 rounded-xl bg-surface-elevated" />
+                <div className="h-4 w-36 rounded-lg bg-surface-elevated" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section
@@ -43,7 +92,7 @@ export const Hero: React.FC<HeroProps> = ({
                 <span className="text-accent" aria-hidden="true">
                   ·
                 </span>
-                <span>Accra, Ghana</span>
+                <span>{hero.location}</span>
                 <span className="text-accent" aria-hidden="true">
                   ·
                 </span>
@@ -51,11 +100,11 @@ export const Hero: React.FC<HeroProps> = ({
               </p>
 
               <h1 className="font-display text-[1.85rem] sm:text-4xl lg:text-[3.4rem] font-semibold tracking-tight text-ink leading-[1.2] break-words mb-5 sm:mb-6">
-                {settings.heroHeadline}
+                {hero.heroTitle}
               </h1>
 
               <p className="text-[15px] sm:text-base lg:text-lg text-ink-secondary leading-relaxed max-w-2xl mb-8 sm:mb-10">
-                {settings.heroSubheadline}
+                {hero.heroSubtitle}
               </p>
             </div>
 
@@ -72,7 +121,7 @@ export const Hero: React.FC<HeroProps> = ({
               <a
                 href={buildWhatsAppUrl(
                   'Hello Aizer Tech, I would like to discuss building a website or mobile app.',
-                  settings.whatsappNumber
+                  hero.whatsappNumber
                 )}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -87,7 +136,7 @@ export const Hero: React.FC<HeroProps> = ({
                 onClick={onExplorePortfolio}
                 className="haptic-tap w-full sm:w-auto inline-flex items-center justify-center px-3 py-3 text-sm font-medium text-ink-muted hover:text-ink sm:whitespace-nowrap shrink-0 cursor-pointer"
               >
-                View Food App Case Study
+                View Portfolio &amp; Demo
               </button>
             </div>
           </div>
@@ -112,8 +161,8 @@ export const Hero: React.FC<HeroProps> = ({
                     </p>
                   </div>
                 </div>
-                <span className="font-mono-tabular text-xs text-accent shrink-0">
-                  ACCRA · GH
+                <span className="font-mono-tabular text-xs text-accent shrink-0 uppercase">
+                  {hero.location}
                 </span>
               </div>
 
@@ -122,34 +171,34 @@ export const Hero: React.FC<HeroProps> = ({
                 <div className="ios-glass-subtle rounded-2xl p-4 sm:p-5">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 mb-2.5">
                     <span className="text-xs text-ink-muted">
-                      Tier 01 · Business Web
+                      Tier 01 · {webService?.name || 'Website Development'}
                     </span>
                     <span className="font-mono-tabular text-sm font-semibold text-accent">
-                      {settings.websiteStartingPrice}
+                      {webRateLabel}
                     </span>
                   </div>
                   <p className="text-sm font-medium text-ink leading-snug mb-1.5">
                     Signature Company Sites &amp; Booking Portals
                   </p>
                   <p className="text-xs text-ink-muted leading-relaxed">
-                    Tailored UI architecture, WhatsApp lead routing, and fast Ghanaian &amp; global CDN delivery.
+                    Delivered in {webService?.deliveryTime || '7 Days'} with WhatsApp lead routing and fast mobile loading.
                   </p>
                 </div>
 
                 <div className="ios-glass-gold rounded-2xl p-4 sm:p-5">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 mb-2.5">
                     <span className="text-xs text-accent font-medium">
-                      Tier 02 · Mobile &amp; Food Apps
+                      Tier 02 · {appService?.name || 'App Development'}
                     </span>
                     <span className="font-mono-tabular text-sm font-semibold text-ink">
-                      {settings.mobileStartingPrice}
+                      {mobileRateLabel}
                     </span>
                   </div>
                   <p className="text-sm font-medium text-ink leading-snug mb-1.5">
                     iOS &amp; Android Apps with MoMo Checkout
                   </p>
                   <p className="text-xs text-ink-secondary leading-relaxed">
-                    Fluid gesture-driven food ordering, live rider tracking, and instant MTN MoMo / Telecel Cash checkout.
+                    Delivered in {appService?.deliveryTime || '3 – 6 Weeks'} with MTN MoMo / Telecel Cash checkout and real-time sync.
                   </p>
                 </div>
               </div>
@@ -195,7 +244,7 @@ export const Hero: React.FC<HeroProps> = ({
           </div>
           <div className="min-w-0">
             <p className="font-display text-2xl lg:text-3xl font-semibold text-ink leading-[1.2]">
-              Accra, GH
+              {hero.location}
             </p>
             <p className="text-sm text-ink-muted mt-1.5">
               Serving Ghana &amp; global teams

@@ -210,6 +210,80 @@ service cloud.firestore {
       allow delete: if isValidId(projectId) && isAdmin();
     }
 
+    function isValidWebsiteCmsDoc(data) {
+      return data.keys().hasAll([
+          'hero',
+          'services',
+          'projects',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'hero',
+          'services',
+          'projects',
+          'updatedAt',
+          'publishedAt'
+        ]) &&
+        data.hero is map &&
+        data.hero.keys().hasAll([
+          'heroTitle',
+          'heroSubtitle',
+          'announcementBanner',
+          'whatsappNumber',
+          'email',
+          'location',
+          'aboutText',
+          'whyUsPoints'
+        ]) &&
+        data.hero.heroTitle is string && data.hero.heroTitle.size() >= 4 && data.hero.heroTitle.size() <= 200 &&
+        data.hero.heroSubtitle is string && data.hero.heroSubtitle.size() >= 4 && data.hero.heroSubtitle.size() <= 600 &&
+        data.hero.announcementBanner is string && data.hero.announcementBanner.size() <= 200 &&
+        data.hero.whatsappNumber is string && data.hero.whatsappNumber.size() >= 7 && data.hero.whatsappNumber.size() <= 25 &&
+        isValidEmail(data.hero.email) &&
+        data.hero.location is string && data.hero.location.size() >= 2 && data.hero.location.size() <= 100 &&
+        data.hero.aboutText is string && data.hero.aboutText.size() >= 10 && data.hero.aboutText.size() <= 1200 &&
+        data.hero.whyUsPoints is list && data.hero.whyUsPoints.size() <= 15 &&
+        data.services is list && data.services.size() <= 30 &&
+        data.projects is list && data.projects.size() <= 40 &&
+        data.updatedAt is timestamp;
+    }
+
+    match /aizertech_live/{docId} {
+      allow get: if isValidId(docId) && docId == 'website';
+      allow list: if false;
+      allow create, update: if isValidId(docId) &&
+        docId == 'website' &&
+        isAdmin() &&
+        isValidWebsiteCmsDoc(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /aizertech_draft/{docId} {
+      allow get: if isValidId(docId) && docId == 'website' && isAdmin();
+      allow list: if false;
+      allow create, update: if isValidId(docId) &&
+        docId == 'website' &&
+        isAdmin() &&
+        isValidWebsiteCmsDoc(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /aizertech_backup/{backupId} {
+      allow get: if isValidId(backupId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(backupId) &&
+        isAdmin() &&
+        incoming().keys().hasAll(['label', 'snapshot', 'backedUpAt']) &&
+        incoming().keys().hasOnly(['label', 'snapshot', 'backedUpAt']) &&
+        incoming().label is string && incoming().label.size() >= 2 && incoming().label.size() <= 120 &&
+        incoming().snapshot is map &&
+        incoming().backedUpAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(backupId) && isAdmin();
+    }
+
     function isValidStudioSettings(data) {
       return data.keys().hasAll([
           'heroHeadline',
