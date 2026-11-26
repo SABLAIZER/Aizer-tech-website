@@ -1107,14 +1107,37 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
         },
         services: baseCms.services.map((svc) => {
           const lower = svc.name.toLowerCase();
-          if (lower.includes('website')) {
-            return { ...svc, startingPrice: next.websiteStartingPrice.trim() || svc.startingPrice };
+          if (
+            svc.id === 'website-development' ||
+            lower.includes('web') ||
+            lower.includes('site')
+          ) {
+            return {
+              ...svc,
+              startingPrice: next.websiteStartingPrice.trim() || svc.startingPrice,
+            };
           }
-          if (lower.includes('app')) {
-            return { ...svc, startingPrice: next.mobileStartingPrice.trim() || svc.startingPrice };
+          if (
+            svc.id === 'app-development' ||
+            lower.includes('app') ||
+            lower.includes('mobile')
+          ) {
+            return {
+              ...svc,
+              startingPrice: next.mobileStartingPrice.trim() || svc.startingPrice,
+            };
           }
-          if (lower.includes('logo') || lower.includes('ui/ux')) {
-            return { ...svc, startingPrice: next.brandingStartingPrice.trim() || svc.startingPrice };
+          if (
+            svc.id === 'logo-branding' ||
+            svc.id === 'ui-ux-design' ||
+            lower.includes('logo') ||
+            lower.includes('brand') ||
+            lower.includes('ui')
+          ) {
+            return {
+              ...svc,
+              startingPrice: next.brandingStartingPrice.trim() || svc.startingPrice,
+            };
           }
           return svc;
         }),
@@ -1196,39 +1219,74 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
       await setDoc(doc(db, 'aizertech_draft', 'website'), livePayload);
 
       // 3. Mirror key contact & hero values to studioSettings/public for backward compatibility
-      const webSvc = nextLive.services.find((s) =>
-        s.name.toLowerCase().includes('web')
+      const webSvc = nextLive.services.find(
+        (s) =>
+          s.id === 'website-development' ||
+          s.name.toLowerCase().includes('web') ||
+          s.name.toLowerCase().includes('site')
       );
-      const appSvc = nextLive.services.find((s) =>
-        s.name.toLowerCase().includes('app')
+      const appSvc = nextLive.services.find(
+        (s) =>
+          s.id === 'app-development' ||
+          s.name.toLowerCase().includes('app') ||
+          s.name.toLowerCase().includes('mobile')
       );
       const brandSvc = nextLive.services.find(
         (s) =>
+          s.id === 'logo-branding' ||
+          s.id === 'ui-ux-design' ||
           s.name.toLowerCase().includes('logo') ||
           s.name.toLowerCase().includes('ui')
       );
-      await setDoc(doc(db, 'studioSettings', 'public'), {
-        heroHeadline: nextLive.hero.heroTitle.trim().slice(0, 140),
-        heroSubheadline: nextLive.hero.heroSubtitle.trim().slice(0, 350),
-        announcementBanner: nextLive.hero.announcementBanner.trim().slice(0, 160),
-        websiteStartingPrice: (
-          webSvc?.startingPrice || studioSettings.websiteStartingPrice
-        ).slice(0, 40),
-        mobileStartingPrice: (
-          appSvc?.startingPrice || studioSettings.mobileStartingPrice
-        ).slice(0, 40),
-        brandingStartingPrice: (
-          brandSvc?.startingPrice || studioSettings.brandingStartingPrice
-        ).slice(0, 40),
-        whatsappNumber: nextLive.hero.whatsappNumber.trim().slice(0, 20),
-        contactEmail: nextLive.hero.email.trim().slice(0, 150),
-        founderBio: nextLive.hero.aboutText.trim().slice(0, 600),
-        momoNumber: studioSettings.momoNumber.trim().slice(0, 30),
-        momoName: studioSettings.momoName.trim().slice(0, 80),
-        autoReplyMessage: studioSettings.autoReplyMessage.trim().slice(0, 500),
-        workingHours: studioSettings.workingHours.trim().slice(0, 120),
-        updatedAt: serverTimestamp(),
-      });
+
+      const cleanHeadline = nextLive.hero.heroTitle.trim().slice(0, 140);
+      const cleanSubheadline = nextLive.hero.heroSubtitle.trim().slice(0, 350);
+      const cleanBio = nextLive.hero.aboutText.trim().slice(0, 600);
+      const cleanWebPrice = (
+        webSvc?.startingPrice || studioSettings.websiteStartingPrice
+      )
+        .trim()
+        .slice(0, 40);
+      const cleanMobilePrice = (
+        appSvc?.startingPrice || studioSettings.mobileStartingPrice
+      )
+        .trim()
+        .slice(0, 40);
+      const cleanBrandPrice = (
+        brandSvc?.startingPrice || studioSettings.brandingStartingPrice
+      )
+        .trim()
+        .slice(0, 40);
+
+      if (
+        cleanHeadline.length >= 10 &&
+        cleanSubheadline.length >= 10 &&
+        cleanBio.length >= 20 &&
+        cleanWebPrice.length >= 2 &&
+        cleanMobilePrice.length >= 2 &&
+        cleanBrandPrice.length >= 2
+      ) {
+        try {
+          await setDoc(doc(db, 'studioSettings', 'public'), {
+            heroHeadline: cleanHeadline,
+            heroSubheadline: cleanSubheadline,
+            announcementBanner: nextLive.hero.announcementBanner.trim().slice(0, 160),
+            websiteStartingPrice: cleanWebPrice,
+            mobileStartingPrice: cleanMobilePrice,
+            brandingStartingPrice: cleanBrandPrice,
+            whatsappNumber: nextLive.hero.whatsappNumber.trim().slice(0, 20),
+            contactEmail: nextLive.hero.email.trim().slice(0, 150),
+            founderBio: cleanBio,
+            momoNumber: studioSettings.momoNumber.trim().slice(0, 30),
+            momoName: studioSettings.momoName.trim().slice(0, 80),
+            autoReplyMessage: studioSettings.autoReplyMessage.trim().slice(0, 500),
+            workingHours: studioSettings.workingHours.trim().slice(0, 120),
+            updatedAt: serverTimestamp(),
+          });
+        } catch (mirrorErr) {
+          console.warn('Non-blocking studioSettings mirror warning:', mirrorErr);
+        }
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'aizertech_live/website');
     }

@@ -11,6 +11,7 @@ import { Reveal } from './Reveal';
 interface ServicesSectionProps {
   cms: WebsiteCmsData;
   loading?: boolean;
+  isLoggedIn: boolean;
   onSelectService: (service: ServiceType, budget: BudgetTier) => void;
   onChatWithUs: () => void;
 }
@@ -47,6 +48,7 @@ function mapServiceToBookingArgs(service: CmsServiceItem): {
 export const ServicesSection: React.FC<ServicesSectionProps> = ({
   cms,
   loading = false,
+  isLoggedIn,
   onSelectService,
   onChatWithUs,
 }) => {
@@ -84,10 +86,14 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({
           <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 lg:gap-8 mb-10 sm:mb-14">
             <div className="max-w-2xl">
               <p className="text-sm text-accent font-medium mb-3">
-                Capabilities &amp; Transparent Pricing
+                {isLoggedIn
+                  ? 'Capabilities & Transparent Pricing'
+                  : 'Capabilities & Studio Services'}
               </p>
               <h2 className="font-display text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight text-ink leading-[1.2] mb-1">
-                Focused engineering services with clear starting rates.
+                {isLoggedIn
+                  ? 'Focused engineering services with clear starting rates.'
+                  : 'Focused engineering services crafted for modern growth.'}
               </h2>
             </div>
             <p className="text-sm lg:text-base text-ink-muted max-w-md leading-relaxed">
@@ -123,9 +129,11 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({
                           {service.name}
                         </h3>
                       </div>
-                      <span className="font-mono-tabular text-sm sm:text-base font-semibold text-accent sm:whitespace-nowrap shrink-0">
-                        {service.startingPrice}
-                      </span>
+                      {isLoggedIn && (
+                        <span className="font-mono-tabular text-sm sm:text-base font-semibold text-accent sm:whitespace-nowrap shrink-0">
+                          {service.startingPrice}
+                        </span>
+                      )}
                     </div>
 
                     <p className="text-xs text-ink-subtle mb-3 inline-flex items-center gap-1.5">

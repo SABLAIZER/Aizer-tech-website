@@ -61,7 +61,12 @@ export const BookCallSection: React.FC<BookCallSectionProps> = ({
       .map((svc) => svc.name.trim());
     return visibleCmsServices.length > 0
       ? visibleCmsServices
-      : [...SERVICE_OPTIONS];
+      : [
+          'Business Website',
+          'Mobile App',
+          'Food App / Custom Platform',
+          'Consulting & UI/UX',
+        ];
   }, [cms.services]);
 
   const minDate = useMemo(() => getTodayIso(), []);

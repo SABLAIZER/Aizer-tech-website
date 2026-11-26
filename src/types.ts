@@ -374,10 +374,25 @@ export interface StudioSettings {
   updatedAt?: { seconds: number; nanoseconds: number } | null;
 }
 
+export const VISITOR_HERO_SUBTITLE =
+  'Aizer Tech crafts high-converting business websites and bespoke iOS & Android mobile apps - built in Accra for discerning local and international brands.';
+
+export function sanitizeHeroSubtitleForVisitor(subtitle?: string): string {
+  const raw = (subtitle || '').trim();
+  if (!raw) return VISITOR_HERO_SUBTITLE;
+  if (
+    /\bghs\b/i.test(raw) ||
+    /\bstarting\s+from\b/i.test(raw) ||
+    /\bfrom\s+ghs?\s*\d/i.test(raw)
+  ) {
+    return VISITOR_HERO_SUBTITLE;
+  }
+  return raw;
+}
+
 export const DEFAULT_STUDIO_SETTINGS: StudioSettings = {
   heroHeadline: 'Luxury digital products engineered for modern businesses.',
-  heroSubheadline:
-    'Aizer Tech crafts high-converting business websites starting from GHS 600 and bespoke iOS & Android mobile apps starting from GHS 1,500—built in Accra for discerning local and international brands.',
+  heroSubheadline: VISITOR_HERO_SUBTITLE,
   announcementBanner: '',
   websiteStartingPrice: 'From GHS 600',
   mobileStartingPrice: 'From GHS 1,500',

@@ -10,6 +10,7 @@ import { BrandMark } from './BrandMark';
 interface FooterProps {
   theme: ThemeMode;
   cms: WebsiteCmsData;
+  isLoggedIn: boolean;
   onChangeTheme: (theme: ThemeMode) => void;
   onChatWithUs: () => void;
 }
@@ -17,6 +18,7 @@ interface FooterProps {
 export const Footer: React.FC<FooterProps> = ({
   theme,
   cms,
+  isLoggedIn,
   onChangeTheme,
   onChatWithUs,
 }) => {
@@ -47,7 +49,9 @@ export const Footer: React.FC<FooterProps> = ({
             </span>
           </div>
           <p className="mt-2 text-sm text-ink-muted">
-            Websites from {cleanWebRate} · Mobile &amp; Food Apps from {cleanMobileRate} · Sablaizer · {cms.hero.location}
+            {isLoggedIn
+              ? `Websites from ${cleanWebRate} · Mobile & Food Apps from ${cleanMobileRate} · Sablaizer · ${cms.hero.location}`
+              : `Websites & Mobile Apps · Sablaizer · ${cms.hero.location}`}
           </p>
         </div>
 

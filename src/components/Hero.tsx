@@ -3,6 +3,7 @@ import { ArrowUpRight, MessageCircle, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 import {
   formatWhatsAppDisplay,
+  sanitizeHeroSubtitleForVisitor,
   WebsiteCmsData,
 } from '../types';
 import { BrandMark } from './BrandMark';
@@ -10,6 +11,7 @@ import { BrandMark } from './BrandMark';
 interface HeroProps {
   cms: WebsiteCmsData;
   loading?: boolean;
+  isLoggedIn: boolean;
   onStartProject: () => void;
   onChatWithUs: () => void;
   onExplorePortfolio: () => void;
@@ -18,6 +20,7 @@ interface HeroProps {
 export const Hero: React.FC<HeroProps> = ({
   cms,
   loading = false,
+  isLoggedIn,
   onStartProject,
   onChatWithUs,
   onExplorePortfolio,
@@ -34,6 +37,9 @@ export const Hero: React.FC<HeroProps> = ({
   const cleanMobileRate = mobileRateLabel.replace(/^From\s+/i, '');
   const whatsappDisplay = formatWhatsAppDisplay(hero.whatsappNumber);
   const announcement = hero.announcementBanner.trim();
+  const displayedSubtitle = isLoggedIn
+    ? hero.heroSubtitle
+    : sanitizeHeroSubtitleForVisitor(hero.heroSubtitle);
 
   if (loading) {
     return (
@@ -105,7 +111,7 @@ export const Hero: React.FC<HeroProps> = ({
               </h1>
 
               <p className="text-[15px] sm:text-base lg:text-lg text-ink-secondary leading-relaxed max-w-2xl mb-8 sm:mb-10">
-                {hero.heroSubtitle}
+                {displayedSubtitle}
               </p>
             </div>
 
@@ -170,9 +176,11 @@ export const Hero: React.FC<HeroProps> = ({
                     <span className="text-xs text-ink-muted">
                       Tier 01 · {webService?.name || 'Website Development'}
                     </span>
-                    <span className="font-mono-tabular text-sm font-semibold text-accent">
-                      {webRateLabel}
-                    </span>
+                    {isLoggedIn && (
+                      <span className="font-mono-tabular text-sm font-semibold text-accent">
+                        {webRateLabel}
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm font-medium text-ink leading-snug mb-1.5">
                     Signature Company Sites &amp; Booking Portals
@@ -187,9 +195,11 @@ export const Hero: React.FC<HeroProps> = ({
                     <span className="text-xs text-accent font-medium">
                       Tier 02 · {appService?.name || 'App Development'}
                     </span>
-                    <span className="font-mono-tabular text-sm font-semibold text-ink">
-                      {mobileRateLabel}
-                    </span>
+                    {isLoggedIn && (
+                      <span className="font-mono-tabular text-sm font-semibold text-ink">
+                        {mobileRateLabel}
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm font-medium text-ink leading-snug mb-1.5">
                     iOS &amp; Android Apps with MoMo Checkout
@@ -225,18 +235,18 @@ export const Hero: React.FC<HeroProps> = ({
         >
           <div className="min-w-0">
             <p className="font-mono-tabular text-2xl lg:text-3xl font-semibold text-ink leading-[1.2]">
-              {cleanWebRate}
+              {isLoggedIn ? cleanWebRate : webService?.deliveryTime || '7 Days'}
             </p>
             <p className="text-sm text-ink-muted mt-1.5">
-              Business websites starting rate
+              {isLoggedIn ? 'Business websites starting rate' : 'Business websites delivery'}
             </p>
           </div>
           <div className="min-w-0">
             <p className="font-mono-tabular text-2xl lg:text-3xl font-semibold text-ink leading-[1.2]">
-              {cleanMobileRate}
+              {isLoggedIn ? cleanMobileRate : appService?.deliveryTime || '3 – 6 Weeks'}
             </p>
             <p className="text-sm text-ink-muted mt-1.5">
-              Mobile applications starting rate
+              {isLoggedIn ? 'Mobile applications starting rate' : 'Mobile applications delivery'}
             </p>
           </div>
           <div className="min-w-0">

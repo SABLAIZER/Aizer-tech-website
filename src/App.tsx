@@ -42,7 +42,7 @@ import {
 } from './utils/visitorTracker';
 
 const THEME_STORAGE_KEY = 'aizer-theme';
-const LIVE_CMS_CACHE_KEY = 'aizer_live_website_cache_v2';
+const LIVE_CMS_CACHE_KEY = 'aizer_live_website_cache_v3';
 
 function getInitialTheme(): ThemeMode {
   try {
@@ -290,12 +290,16 @@ export default function App() {
         setCmsLoading(false);
       },
       (error) => {
-        console.error('Live website subscription warning (using cached version):', error);
+        const reason =
+          error && typeof error === 'object' && 'code' in error
+            ? String((error as { code?: unknown }).code)
+            : 'unavailable';
+        console.warn(`Live website subscription paused (${reason}); using cached/default content.`);
         setCmsLoading(false);
       }
     );
     return () => unsubscribe();
-  }, []);
+  }, [authReady, authUser?.uid]);
 
   // Legacy studioSettings/public sync
   useEffect(() => {
@@ -386,12 +390,16 @@ export default function App() {
         }
       },
       (error) => {
-        console.error('Studio settings subscription warning:', error);
+        const reason =
+          error && typeof error === 'object' && 'code' in error
+            ? String((error as { code?: unknown }).code)
+            : 'unavailable';
+        console.warn(`Studio settings subscription paused (${reason}); using default settings.`);
         setStudioSettings(DEFAULT_STUDIO_SETTINGS);
       }
     );
     return () => unsubscribe();
-  }, [hasLiveDoc]);
+  }, [hasLiveDoc, authReady, authUser?.uid]);
 
   // Real-time approved public testimonials
   useEffect(() => {
@@ -425,13 +433,17 @@ export default function App() {
         setTestimonialsLoading(false);
       },
       (error) => {
-        console.error('Testimonials subscription warning:', error);
+        const reason =
+          error && typeof error === 'object' && 'code' in error
+            ? String((error as { code?: unknown }).code)
+            : 'unavailable';
+        console.warn(`Testimonials subscription paused (${reason}); hiding unauthenticated reviews.`);
         setTestimonials([]);
         setTestimonialsLoading(false);
       }
     );
     return () => unsubscribe();
-  }, []);
+  }, [authReady, authUser?.uid]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -522,8 +534,25 @@ export default function App() {
     });
   };
 
+  const isLoggedIn = Boolean(authUser && authUser.emailVerified);
+
   const handleBuildFoodApp = () => {
     handleGatedQuote('Food App / Custom Platform', 'GHS 1,500 - 2,500');
+  };
+
+  const handleRequestPortfolioProject = (project: {
+    category?: string;
+  }) => {
+    const cat = (project.category || '').toLowerCase();
+    if (cat.includes('app')) {
+      handleGatedQuote('Mobile App (from GHS 1,500)', 'GHS 1,500 - 2,500');
+      return;
+    }
+    if (cat.includes('e-commerce') || cat.includes('food')) {
+      handleGatedQuote('Food App / Custom Platform', 'GHS 1,500 - 2,500');
+      return;
+    }
+    handleGatedQuote('Business Website (from GHS 600)', 'GHS 600 - 1,500');
   };
 
   const handleSaveFirstLoginPhone = async (phone: string) => {
@@ -603,6 +632,7 @@ export default function App() {
               <Hero
                 cms={liveCms}
                 loading={cmsLoading}
+                isLoggedIn={isLoggedIn}
                 onStartProject={() => handleGatedQuote()}
                 onChatWithUs={handleGatedChat}
                 onExplorePortfolio={() => scrollToSection('portfolio')}
@@ -611,6 +641,7 @@ export default function App() {
               <ServicesSection
                 cms={liveCms}
                 loading={cmsLoading}
+                isLoggedIn={isLoggedIn}
                 onSelectService={handleGatedQuote}
                 onChatWithUs={handleGatedChat}
               />
@@ -618,12 +649,18 @@ export default function App() {
               <FoodAppShowcase
                 cms={liveCms}
                 loading={cmsLoading}
+                isLoggedIn={isLoggedIn}
                 onBuildSimilarFoodApp={handleBuildFoodApp}
+                onRequestPortfolioProject={handleRequestPortfolioProject}
               />
 
               <ProcessSection />
 
-              <FounderSection cms={liveCms} loading={cmsLoading} />
+              <FounderSection
+                cms={liveCms}
+                loading={cmsLoading}
+                isLoggedIn={isLoggedIn}
+              />
 
               <ClientSuccessSection
                 testimonials={testimonials}
@@ -656,6 +693,7 @@ export default function App() {
             <Footer
               theme={theme}
               cms={liveCms}
+              isLoggedIn={isLoggedIn}
               onChangeTheme={setTheme}
               onChatWithUs={handleGatedChat}
             />

@@ -10,11 +10,13 @@ import { Reveal } from './Reveal';
 interface FounderSectionProps {
   cms: WebsiteCmsData;
   loading?: boolean;
+  isLoggedIn: boolean;
 }
 
 export const FounderSection: React.FC<FounderSectionProps> = ({
   cms,
   loading = false,
+  isLoggedIn,
 }) => {
   const [portraitFailed, setPortraitFailed] = useState(false);
   const { hero, services } = cms;
@@ -100,17 +102,23 @@ export const FounderSection: React.FC<FounderSectionProps> = ({
               <p className="text-sm sm:text-base text-ink-secondary leading-relaxed mb-5">
                 {hero.aboutText}
               </p>
-              <p className="text-sm sm:text-base text-ink-secondary leading-relaxed mb-6">
-                Every website (
-                <span className="text-ink font-mono-tabular font-semibold whitespace-nowrap">
-                  {webService?.startingPrice || 'From GHS 600'}
-                </span>
-                ) and mobile application (
-                <span className="text-ink font-mono-tabular font-semibold whitespace-nowrap">
-                  {appService?.startingPrice || 'From GHS 1,500'}
-                </span>
-                ) is engineered with direct founder accountability from kickoff to launch.
-              </p>
+              {isLoggedIn ? (
+                <p className="text-sm sm:text-base text-ink-secondary leading-relaxed mb-6">
+                  Every website (
+                  <span className="text-ink font-mono-tabular font-semibold whitespace-nowrap">
+                    {webService?.startingPrice || 'From GHS 600'}
+                  </span>
+                  ) and mobile application (
+                  <span className="text-ink font-mono-tabular font-semibold whitespace-nowrap">
+                    {appService?.startingPrice || 'From GHS 1,500'}
+                  </span>
+                  ) is engineered with direct founder accountability from kickoff to launch.
+                </p>
+              ) : (
+                <p className="text-sm sm:text-base text-ink-secondary leading-relaxed mb-6">
+                  Every website and mobile application is engineered with direct founder accountability from kickoff to launch.
+                </p>
+              )}
 
               {hero.whyUsPoints.length > 0 && (
                 <ul className="space-y-2.5 mb-8">

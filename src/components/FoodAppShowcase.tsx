@@ -16,7 +16,9 @@ import { Reveal } from './Reveal';
 interface FoodAppShowcaseProps {
   cms: WebsiteCmsData;
   loading?: boolean;
+  isLoggedIn: boolean;
   onBuildSimilarFoodApp: () => void;
+  onRequestPortfolioProject?: (project: CmsPortfolioProject) => void;
 }
 
 const FOOD_MENU: FoodDish[] = [
@@ -86,7 +88,9 @@ type DishFilter = 'All' | 'Jollof & Grill' | 'Local Bowls' | 'Drinks';
 export const FoodAppShowcase: React.FC<FoodAppShowcaseProps> = ({
   cms,
   loading = false,
+  isLoggedIn,
   onBuildSimilarFoodApp,
+  onRequestPortfolioProject,
 }) => {
   const [phoneTab, setPhoneTab] = useState<PhoneTab>('menu');
   const [dishFilter, setDishFilter] = useState<DishFilter>('All');
@@ -688,9 +692,11 @@ export const FoodAppShowcase: React.FC<FoodAppShowcaseProps> = ({
                         <span>
                           {project.category} · {project.location || cms.hero.location}
                         </span>
-                        <span className="font-mono-tabular text-accent font-semibold">
-                          {project.price}
-                        </span>
+                        {isLoggedIn && (
+                          <span className="font-mono-tabular text-accent font-semibold">
+                            {project.price}
+                          </span>
+                        )}
                       </div>
                       <h3 className="font-display text-xl font-semibold text-ink leading-[1.2] mb-2">
                         {project.title}
@@ -781,17 +787,28 @@ export const FoodAppShowcase: React.FC<FoodAppShowcaseProps> = ({
               </p>
 
               <div className="pt-4 border-t border-hairline flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs text-ink-subtle">Build Value</p>
-                  <p className="font-mono-tabular text-base font-semibold text-accent">
-                    {activeCmsProject.price}
-                  </p>
-                </div>
+                {isLoggedIn ? (
+                  <div>
+                    <p className="text-xs text-ink-subtle">Build Value</p>
+                    <p className="font-mono-tabular text-base font-semibold text-accent">
+                      {activeCmsProject.price}
+                    </p>
+                  </div>
+                ) : (
+                  <span className="text-xs text-ink-subtle">
+                    {activeCmsProject.category}
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={() => {
+                    const selected = activeCmsProject;
                     setActiveCmsProject(null);
-                    onBuildSimilarFoodApp();
+                    if (onRequestPortfolioProject) {
+                      onRequestPortfolioProject(selected);
+                    } else {
+                      onBuildSimilarFoodApp();
+                    }
                   }}
                   className="haptic-tap px-5 py-2.5 rounded-lg bg-accent-btn text-accent-ink text-sm font-semibold hover:bg-accent-hover cursor-pointer"
                 >

@@ -314,7 +314,11 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div
+                  className={`grid grid-cols-1 gap-4 ${
+                    isLoggedIn ? 'sm:grid-cols-3' : 'sm:grid-cols-2'
+                  }`}
+                >
                   <div>
                     <label
                       htmlFor="contact-phone"
@@ -348,36 +352,62 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                       }
                       className="w-full px-3.5 py-3 rounded-xl bg-field border border-hairline-strong text-sm text-ink focus:outline-none focus:border-accent"
                     >
-                      {SERVICE_OPTIONS.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
+                      {SERVICE_OPTIONS.map((option) => {
+                        const webSvc = cms.services.find((s) =>
+                          s.name.toLowerCase().includes('web')
+                        );
+                        const appSvc = cms.services.find((s) =>
+                          s.name.toLowerCase().includes('app')
+                        );
+                        let displayLabel: string = option;
+                        if (!isLoggedIn) {
+                          displayLabel = option
+                            .replace(/\s*\([^)]*ghs[^)]*\)/gi, '')
+                            .trim();
+                        } else if (
+                          option.startsWith('Business Website') &&
+                          webSvc?.startingPrice
+                        ) {
+                          displayLabel = `Business Website (${webSvc.startingPrice.replace(/^From\s+/i, 'from ')})`;
+                        } else if (
+                          option.startsWith('Mobile App') &&
+                          appSvc?.startingPrice
+                        ) {
+                          displayLabel = `Mobile App (${appSvc.startingPrice.replace(/^From\s+/i, 'from ')})`;
+                        }
+                        return (
+                          <option key={option} value={option}>
+                            {displayLabel}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
 
-                  <div>
-                    <label
-                      htmlFor="contact-budget"
-                      className="block text-xs font-medium text-ink-secondary mb-1.5"
-                    >
-                      Estimated Budget
-                    </label>
-                    <select
-                      id="contact-budget"
-                      value={selectedBudget}
-                      onChange={(e) =>
-                        onChangeBudget(e.target.value as BudgetTier)
-                      }
-                      className="w-full px-3.5 py-3 rounded-xl bg-field border border-hairline-strong text-sm text-ink focus:outline-none focus:border-accent"
-                    >
-                      {BUDGET_OPTIONS.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {isLoggedIn && (
+                    <div>
+                      <label
+                        htmlFor="contact-budget"
+                        className="block text-xs font-medium text-ink-secondary mb-1.5"
+                      >
+                        Estimated Budget
+                      </label>
+                      <select
+                        id="contact-budget"
+                        value={selectedBudget}
+                        onChange={(e) =>
+                          onChangeBudget(e.target.value as BudgetTier)
+                        }
+                        className="w-full px-3.5 py-3 rounded-xl bg-field border border-hairline-strong text-sm text-ink focus:outline-none focus:border-accent"
+                      >
+                        {BUDGET_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 <div>
