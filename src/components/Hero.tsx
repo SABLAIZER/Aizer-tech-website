@@ -31,8 +31,18 @@ export const Hero: React.FC<HeroProps> = ({
   const appService =
     services.find((s) => s.name.toLowerCase().includes('app')) || services[1];
 
-  const webRateLabel = webService?.startingPrice || 'From GHS 600';
-  const mobileRateLabel = appService?.startingPrice || 'From GHS 1,500';
+  const webRateLabel =
+    hero.heroWebsitePrice !== undefined
+      ? hero.heroWebsitePrice
+      : webService?.startingPrice || 'From GHS 600';
+  const mobileRateLabel =
+    hero.heroAppPrice !== undefined
+      ? hero.heroAppPrice
+      : appService?.startingPrice || 'From GHS 1,500';
+  const showWebHeroPrice =
+    isLoggedIn && !hero.heroWebsitePriceHidden && Boolean(webRateLabel.trim());
+  const showAppHeroPrice =
+    isLoggedIn && !hero.heroAppPriceHidden && Boolean(mobileRateLabel.trim());
   const cleanWebRate = webRateLabel.replace(/^From\s+/i, '');
   const cleanMobileRate = mobileRateLabel.replace(/^From\s+/i, '');
   const whatsappDisplay = formatWhatsAppDisplay(hero.whatsappNumber);
@@ -176,7 +186,7 @@ export const Hero: React.FC<HeroProps> = ({
                     <span className="text-xs text-ink-muted">
                       Tier 01 · {webService?.name || 'Website Development'}
                     </span>
-                    {isLoggedIn && (
+                    {showWebHeroPrice && (
                       <span className="font-mono-tabular text-sm font-semibold text-accent">
                         {webRateLabel}
                       </span>
@@ -195,7 +205,7 @@ export const Hero: React.FC<HeroProps> = ({
                     <span className="text-xs text-accent font-medium">
                       Tier 02 · {appService?.name || 'App Development'}
                     </span>
-                    {isLoggedIn && (
+                    {showAppHeroPrice && (
                       <span className="font-mono-tabular text-sm font-semibold text-ink">
                         {mobileRateLabel}
                       </span>
@@ -235,18 +245,18 @@ export const Hero: React.FC<HeroProps> = ({
         >
           <div className="min-w-0">
             <p className="font-mono-tabular text-2xl lg:text-3xl font-semibold text-ink leading-[1.2]">
-              {isLoggedIn ? cleanWebRate : webService?.deliveryTime || '7 Days'}
+              {showWebHeroPrice ? cleanWebRate : webService?.deliveryTime || '7 Days'}
             </p>
             <p className="text-sm text-ink-muted mt-1.5">
-              {isLoggedIn ? 'Business websites starting rate' : 'Business websites delivery'}
+              {showWebHeroPrice ? 'Business websites starting rate' : 'Business websites delivery'}
             </p>
           </div>
           <div className="min-w-0">
             <p className="font-mono-tabular text-2xl lg:text-3xl font-semibold text-ink leading-[1.2]">
-              {isLoggedIn ? cleanMobileRate : appService?.deliveryTime || '3 – 6 Weeks'}
+              {showAppHeroPrice ? cleanMobileRate : appService?.deliveryTime || '3 – 6 Weeks'}
             </p>
             <p className="text-sm text-ink-muted mt-1.5">
-              {isLoggedIn ? 'Mobile applications starting rate' : 'Mobile applications delivery'}
+              {showAppHeroPrice ? 'Mobile applications starting rate' : 'Mobile applications delivery'}
             </p>
           </div>
           <div className="min-w-0">

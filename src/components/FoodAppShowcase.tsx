@@ -692,7 +692,7 @@ export const FoodAppShowcase: React.FC<FoodAppShowcaseProps> = ({
                         <span>
                           {project.category} · {project.location || cms.hero.location}
                         </span>
-                        {isLoggedIn && (
+                        {isLoggedIn && !project.priceHidden && project.price.trim() && (
                           <span className="font-mono-tabular text-accent font-semibold">
                             {project.price}
                           </span>
@@ -787,7 +787,7 @@ export const FoodAppShowcase: React.FC<FoodAppShowcaseProps> = ({
               </p>
 
               <div className="pt-4 border-t border-hairline flex flex-wrap items-center justify-between gap-4">
-                {isLoggedIn ? (
+                {isLoggedIn && !activeCmsProject.priceHidden && activeCmsProject.price.trim() ? (
                   <div>
                     <p className="text-xs text-ink-subtle">Build Value</p>
                     <p className="font-mono-tabular text-base font-semibold text-accent">

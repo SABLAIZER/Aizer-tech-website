@@ -29,14 +29,32 @@ export const Footer: React.FC<FooterProps> = ({
     cms.services.find((s) => s.name.toLowerCase().includes('app')) ||
     cms.services[1];
 
-  const cleanWebRate = (webService?.startingPrice || 'From GHS 600').replace(
-    /^From\s+/i,
-    ''
-  );
-  const cleanMobileRate = (appService?.startingPrice || 'From GHS 1,500').replace(
-    /^From\s+/i,
-    ''
-  );
+  const rawWebRate =
+    cms.hero.heroWebsitePrice !== undefined
+      ? cms.hero.heroWebsitePrice
+      : webService?.startingPrice || 'From GHS 600';
+  const rawMobileRate =
+    cms.hero.heroAppPrice !== undefined
+      ? cms.hero.heroAppPrice
+      : appService?.startingPrice || 'From GHS 1,500';
+  const showWebFooterPrice =
+    isLoggedIn && !cms.hero.heroWebsitePriceHidden && Boolean(rawWebRate.trim());
+  const showAppFooterPrice =
+    isLoggedIn && !cms.hero.heroAppPriceHidden && Boolean(rawMobileRate.trim());
+  const cleanWebRate = rawWebRate.replace(/^From\s+/i, '');
+  const cleanMobileRate = rawMobileRate.replace(/^From\s+/i, '');
+
+  const footerLine = (() => {
+    if (!isLoggedIn || (!showWebFooterPrice && !showAppFooterPrice)) {
+      return `Websites & Mobile Apps · Sablaizer · ${cms.hero.location}`;
+    }
+    const parts: string[] = [];
+    parts.push(showWebFooterPrice ? `Websites from ${cleanWebRate}` : 'Websites');
+    parts.push(
+      showAppFooterPrice ? `Mobile & Food Apps from ${cleanMobileRate}` : 'Mobile & Food Apps'
+    );
+    return `${parts.join(' · ')} · Sablaizer · ${cms.hero.location}`;
+  })();
 
   return (
     <footer className="border-t border-hairline bg-surface py-12">
@@ -48,11 +66,7 @@ export const Footer: React.FC<FooterProps> = ({
               Aizer Tech
             </span>
           </div>
-          <p className="mt-2 text-sm text-ink-muted">
-            {isLoggedIn
-              ? `Websites from ${cleanWebRate} · Mobile & Food Apps from ${cleanMobileRate} · Sablaizer · ${cms.hero.location}`
-              : `Websites & Mobile Apps · Sablaizer · ${cms.hero.location}`}
-          </p>
+          <p className="mt-2 text-sm text-ink-muted">{footerLine}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-5 sm:gap-6 text-sm text-ink-muted">

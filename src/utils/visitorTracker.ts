@@ -88,7 +88,7 @@ async function resolveVisitorGeo(): Promise<{
 }> {
   const localToken = getOrCreateLocalVisitorToken();
   const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), 2200);
+  const timer = window.setTimeout(() => controller.abort(), 1400);
 
   try {
     const res = await fetch('https://ipapi.co/json/', {
@@ -119,14 +119,13 @@ async function resolveVisitorGeo(): Promise<{
 export async function trackUniqueDailyVisit(options: {
   isAdmin: boolean;
   isAdminRoute: boolean;
-}): Promise<void> {
-  if (options.isAdmin || options.isAdminRoute) return;
+}): Promise<boolean> {
+  if (options.isAdmin || options.isAdminRoute) return true;
 
   const dateKey = getTodayDateKey();
   try {
     const alreadyTracked = window.localStorage.getItem(DAILY_VISIT_DATE_KEY);
-    if (alreadyTracked === dateKey) return;
-    window.localStorage.setItem(DAILY_VISIT_DATE_KEY, dateKey);
+    if (alreadyTracked === dateKey) return true;
   } catch {
     // Continue with deterministic IP/token docId even if localStorage is blocked
   }
@@ -146,16 +145,26 @@ export async function trackUniqueDailyVisit(options: {
   try {
     await setDoc(doc(db, 'aizertech_visits', visitDocId), {
       dateKey,
-      timeLabel: timeLabel.slice(0, 20),
+      timeLabel: (timeLabel && timeLabel.trim().length >= 2 ? timeLabel.trim() : '12:00 PM').slice(0, 20),
       pageVisited: pageVisited.slice(0, 60),
       device,
       country: country.slice(0, 80),
       visitorKey: safeVisitorKey,
       createdAt: serverTimestamp(),
     });
-  } catch {
-    // Duplicate same-day visits from the same IP/device intentionally fail `allow update: if false`
-    // to prevent double-counting. Silently ignore expected duplicate rejections.
+    try {
+      window.localStorage.setItem(DAILY_VISIT_DATE_KEY, dateKey);
+    } catch {
+      // Ignore storage access errors
+    }
+    return true;
+  } catch (err) {
+    // Do not lock localStorage on failed write so a subsequent retry or login can record the visit.
+    console.warn(
+      'Visitor tracking write deferred:',
+      err instanceof Error ? err.message : 'unavailable'
+    );
+    return false;
   }
 }
 

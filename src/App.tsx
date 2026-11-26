@@ -266,12 +266,19 @@ export default function App() {
   // Real-time unique daily visitor tracking (excludes admins & /admin route)
   useEffect(() => {
     if (!authReady || visitTrackedRef.current) return;
-    visitTrackedRef.current = true;
+    let cancelled = false;
     void trackUniqueDailyVisit({
       isAdmin: isAllowedAdminEmail(authUser?.email),
       isAdminRoute: isAdminUrlRequested(),
+    }).then((settled) => {
+      if (!cancelled && settled) {
+        visitTrackedRef.current = true;
+      }
     });
-  }, [authReady, authUser]);
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, authUser?.uid, authUser?.email]);
 
   // Primary real-time subscription to aizertech_live/website
   useEffect(() => {

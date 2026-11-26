@@ -16,6 +16,7 @@ import {
   ArrowLeft,
   Calendar,
   Check,
+  Coins,
   Crown,
   FolderKanban,
   Globe,
@@ -76,6 +77,7 @@ import { AdminDashboardHome } from './admin/AdminDashboardHome';
 import { AdminInvoicesView, InvoiceDraftSeed } from './admin/AdminInvoicesView';
 import { AdminLoginCard } from './admin/AdminLoginCard';
 import { AdminMessagesView } from './admin/AdminMessagesView';
+import { AdminPriceManagerView } from './admin/AdminPriceManagerView';
 import { AdminProjectsView } from './admin/AdminProjectsView';
 import { AdminRegisteredUsersView } from './admin/AdminRegisteredUsersView';
 import { AdminSettingsView } from './admin/AdminSettingsView';
@@ -103,6 +105,7 @@ type AdminSection =
   | 'invoices'
   | 'bookings'
   | 'testimonials'
+  | 'prices'
   | 'website'
   | 'users'
   | 'clients'
@@ -509,26 +512,27 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
       }
     );
 
-    const visitsQuery = query(
-      collection(db, 'aizertech_visits'),
-      orderBy('createdAt', 'desc')
-    );
     const unsubVisits = onSnapshot(
-      visitsQuery,
+      collection(db, 'aizertech_visits'),
       (snap) => {
-        const rows: VisitRecord[] = snap.docs.map((docSnap) => {
-          const d = docSnap.data();
-          return {
-            id: docSnap.id,
-            dateKey: String(d.dateKey || ''),
-            timeLabel: String(d.timeLabel || ''),
-            pageVisited: String(d.pageVisited || 'Home'),
-            device: d.device === 'Mobile' ? 'Mobile' : 'Desktop',
-            country: String(d.country || 'Unknown'),
-            visitorKey: String(d.visitorKey || ''),
-            createdAt: d.createdAt || null,
-          };
-        });
+        const rows: VisitRecord[] = snap.docs
+          .map((docSnap) => {
+            const d = docSnap.data();
+            return {
+              id: docSnap.id,
+              dateKey: String(d.dateKey || ''),
+              timeLabel: String(d.timeLabel || ''),
+              pageVisited: String(d.pageVisited || 'Home'),
+              device: (d.device === 'Mobile' ? 'Mobile' : 'Desktop') as 'Mobile' | 'Desktop',
+              country: String(d.country || 'Unknown'),
+              visitorKey: String(d.visitorKey || ''),
+              createdAt: d.createdAt || null,
+            };
+          })
+          .sort((a, b) => {
+            const diff = getTimestampMs(b.createdAt) - getTimestampMs(a.createdAt);
+            return diff !== 0 ? diff : b.dateKey.localeCompare(a.dateKey);
+          });
         setVisits(rows);
         setLoadingVisits(false);
       },
@@ -1160,6 +1164,18 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
       location: cms.hero.location.trim(),
       aboutText: cms.hero.aboutText.trim(),
       whyUsPoints: cms.hero.whyUsPoints.map((pt) => pt.trim()).filter(Boolean),
+      ...(typeof cms.hero.heroWebsitePrice === 'string'
+        ? { heroWebsitePrice: cms.hero.heroWebsitePrice.trim() }
+        : {}),
+      ...(typeof cms.hero.heroAppPrice === 'string'
+        ? { heroAppPrice: cms.hero.heroAppPrice.trim() }
+        : {}),
+      ...(typeof cms.hero.heroWebsitePriceHidden === 'boolean'
+        ? { heroWebsitePriceHidden: cms.hero.heroWebsitePriceHidden }
+        : {}),
+      ...(typeof cms.hero.heroAppPriceHidden === 'boolean'
+        ? { heroAppPriceHidden: cms.hero.heroAppPriceHidden }
+        : {}),
     },
     services: cms.services.map((s) => ({
       id: s.id,
@@ -1168,6 +1184,7 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
       startingPrice: s.startingPrice.trim(),
       deliveryTime: s.deliveryTime.trim(),
       visible: Boolean(s.visible),
+      priceHidden: Boolean(s.priceHidden),
       featured: Boolean(s.featured),
       deliverables: s.deliverables || [],
     })),
@@ -1176,6 +1193,7 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
       title: p.title.trim(),
       category: p.category.trim(),
       price: p.price.trim(),
+      priceHidden: Boolean(p.priceHidden),
       description: p.description.trim(),
       imageUrl: p.imageUrl.trim(),
       clientName: p.clientName.trim(),
@@ -1439,6 +1457,7 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
     { id: 'invoices', label: 'Invoices', shortLabel: 'Invoices', icon: Receipt, badge: unpaidInvoicesCount },
     { id: 'bookings', label: 'Bookings', shortLabel: 'Calls', icon: Calendar, badge: pendingBookingsCount },
     { id: 'testimonials', label: 'Testimonials', shortLabel: 'Reviews', icon: Star },
+    { id: 'prices', label: 'Price Manager', shortLabel: 'Prices', icon: Coins },
     { id: 'website', label: 'Website Control', shortLabel: 'Site', icon: Globe },
     { id: 'clients', label: 'Clients', shortLabel: 'Clients', icon: Users },
     { id: 'projects', label: 'Projects', shortLabel: 'Jobs', icon: FolderKanban },
@@ -1674,6 +1693,13 @@ export const AdminInboxModal: React.FC<AdminInboxModalProps> = ({
               onAddTestimonial={handleAddTestimonial}
               onToggleApprove={handleToggleApproveTestimonial}
               onDeleteTestimonial={handleDeleteTestimonial}
+            />
+          )}
+
+          {activeSection === 'prices' && (
+            <AdminPriceManagerView
+              liveCms={liveCms}
+              onSavePricesLive={handlePublishLive}
             />
           )}
 

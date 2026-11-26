@@ -214,6 +214,7 @@ export interface CmsServiceItem {
   startingPrice: string;
   deliveryTime: string;
   visible: boolean;
+  priceHidden?: boolean;
   deliverables: string[];
   featured?: boolean;
 }
@@ -223,6 +224,7 @@ export interface CmsPortfolioProject {
   title: string;
   category: string;
   price: string;
+  priceHidden?: boolean;
   description: string;
   imageUrl: string;
   clientName: string;
@@ -238,6 +240,10 @@ export interface CmsHeroContact {
   location: string;
   aboutText: string;
   whyUsPoints: string[];
+  heroWebsitePrice?: string;
+  heroAppPrice?: string;
+  heroWebsitePriceHidden?: boolean;
+  heroAppPriceHidden?: boolean;
 }
 
 export interface WebsiteCmsData {
@@ -582,6 +588,18 @@ export function normalizeWebsiteCms(raw: unknown): WebsiteCmsData {
           (item): item is string => typeof item === 'string' && item.trim().length > 0
         )
       : DEFAULT_WEBSITE_CMS.hero.whyUsPoints,
+    ...(typeof rawHero.heroWebsitePrice === 'string'
+      ? { heroWebsitePrice: rawHero.heroWebsitePrice }
+      : {}),
+    ...(typeof rawHero.heroAppPrice === 'string'
+      ? { heroAppPrice: rawHero.heroAppPrice }
+      : {}),
+    ...(typeof rawHero.heroWebsitePriceHidden === 'boolean'
+      ? { heroWebsitePriceHidden: rawHero.heroWebsitePriceHidden }
+      : {}),
+    ...(typeof rawHero.heroAppPriceHidden === 'boolean'
+      ? { heroAppPriceHidden: rawHero.heroAppPriceHidden }
+      : {}),
   };
 
   const services: CmsServiceItem[] = Array.isArray(data.services)
@@ -596,6 +614,7 @@ export function normalizeWebsiteCms(raw: unknown): WebsiteCmsData {
           deliveryTime:
             typeof item.deliveryTime === 'string' ? item.deliveryTime : '7 Days',
           visible: typeof item.visible === 'boolean' ? item.visible : true,
+          priceHidden: Boolean(item.priceHidden),
           featured: Boolean(item.featured),
           deliverables: Array.isArray(item.deliverables)
             ? item.deliverables.filter((d): d is string => typeof d === 'string')
@@ -611,6 +630,7 @@ export function normalizeWebsiteCms(raw: unknown): WebsiteCmsData {
           title: typeof item.title === 'string' ? item.title : 'Client Project',
           category: typeof item.category === 'string' ? item.category : 'Website',
           price: typeof item.price === 'string' ? item.price : 'Project Based',
+          priceHidden: Boolean(item.priceHidden),
           description: typeof item.description === 'string' ? item.description : '',
           imageUrl: typeof item.imageUrl === 'string' ? item.imageUrl : '',
           clientName: typeof item.clientName === 'string' ? item.clientName : '',

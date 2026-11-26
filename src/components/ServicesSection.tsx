@@ -129,7 +129,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({
                           {service.name}
                         </h3>
                       </div>
-                      {isLoggedIn && (
+                      {isLoggedIn && !service.priceHidden && service.startingPrice.trim() && (
                         <span className="font-mono-tabular text-sm sm:text-base font-semibold text-accent sm:whitespace-nowrap shrink-0">
                           {service.startingPrice}
                         </span>

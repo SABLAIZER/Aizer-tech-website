@@ -364,16 +364,16 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                           displayLabel = option
                             .replace(/\s*\([^)]*ghs[^)]*\)/gi, '')
                             .trim();
-                        } else if (
-                          option.startsWith('Business Website') &&
-                          webSvc?.startingPrice
-                        ) {
-                          displayLabel = `Business Website (${webSvc.startingPrice.replace(/^From\s+/i, 'from ')})`;
-                        } else if (
-                          option.startsWith('Mobile App') &&
-                          appSvc?.startingPrice
-                        ) {
-                          displayLabel = `Mobile App (${appSvc.startingPrice.replace(/^From\s+/i, 'from ')})`;
+                        } else if (option.startsWith('Business Website')) {
+                          displayLabel =
+                            !webSvc?.priceHidden && webSvc?.startingPrice?.trim()
+                              ? `Business Website (${webSvc.startingPrice.replace(/^From\s+/i, 'from ')})`
+                              : 'Business Website';
+                        } else if (option.startsWith('Mobile App')) {
+                          displayLabel =
+                            !appSvc?.priceHidden && appSvc?.startingPrice?.trim()
+                              ? `Mobile App (${appSvc.startingPrice.replace(/^From\s+/i, 'from ')})`
+                              : 'Mobile App';
                         }
                         return (
                           <option key={option} value={option}>

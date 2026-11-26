@@ -63,6 +63,7 @@ interface AdminDashboardHomeProps {
       | 'messages'
       | 'invoices'
       | 'bookings'
+      | 'prices'
       | 'clients'
       | 'projects'
       | 'users'
@@ -201,6 +202,13 @@ export const AdminDashboardHome: React.FC<AdminDashboardHomeProps> = ({
           >
             <Receipt className="w-4 h-4 text-[#D4AF37]" />
             <span>Invoices</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigateTab('prices')}
+            className="haptic-tap gold-gradient-btn px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold inline-flex items-center gap-2 cursor-pointer whitespace-nowrap"
+          >
+            <span>💰 Prices</span>
           </button>
         </div>
       </motion.div>
